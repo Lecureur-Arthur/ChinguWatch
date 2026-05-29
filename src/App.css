@@ -1,11 +1,11 @@
-﻿/* DESIGN REFRESH - ChinguWatch */
-:root {
+﻿:root {
   --primary-color: #60e0ff;
   --accent-color: #8f9cff;
   --bg-color: #070b1a;
   --surface: rgba(12, 18, 40, 0.95);
   --muted: #94a1c6;
-  --text-color: #f5f7ff;
+  --secondary-text: #e7efff;
+  --text-color: #f8fbff;
   --border-color: rgba(255, 255, 255, 0.1);
 }
 
@@ -53,8 +53,8 @@ select {
   gap: 1rem;
   padding: 1rem 2rem;
   backdrop-filter: blur(18px);
-  background: rgba(7, 11, 26, 0.88);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(7, 11, 26, 0.98);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 h1 {
@@ -85,19 +85,20 @@ button {
 }
 
 .nav-btn {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-color);
+  background: rgba(255, 255, 255, 0.14);
+  color: #f9fbff;
   padding: 0.85rem 1.35rem;
   font-size: 0.98rem;
   font-weight: 600;
   min-width: 110px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .nav-btn:hover,
 .nav-btn.active {
-  background: rgba(96, 224, 255, 0.12);
-  color: var(--primary-color);
-  border-color: rgba(96, 224, 255, 0.25);
+  background: rgba(96, 224, 255, 0.24);
+  color: #ffffff;
+  border-color: rgba(96, 224, 255, 0.36);
 }
 
 .app-container {
@@ -211,18 +212,34 @@ button:disabled {
   min-width: 48px;
   min-height: 48px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
+  padding: 0;
 }
 
 .avatar-nav-btn:hover {
-  border-color: rgba(96, 224, 255, 0.45);
+  border-color: rgba(96, 224, 255, 0.65);
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .nav-avatar {
   width: 100%;
   height: 100%;
   border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+.avatar-fallback {
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.2rem;
+  line-height: 1;
 }
 
 .genre-btn {
@@ -268,7 +285,7 @@ button:disabled {
 
 .translating-text {
   font-size: 0.88rem;
-  color: var(--muted);
+  color: #d8e1ff;
   text-align: left;
 }
 
@@ -370,6 +387,7 @@ button:disabled {
 .detail-container {
   padding: 2.5rem;
   border-radius: 28px;
+  width: 100%;
 }
 
 .detail-header {
@@ -415,7 +433,7 @@ button:disabled {
 
 .meta-label {
   font-size: 0.85rem;
-  color: #98a0d6;
+  color: var(--secondary-text);
   text-transform: uppercase;
   letter-spacing: 1px;
 }
@@ -516,7 +534,7 @@ button:disabled {
 
 .actor-modal-header p {
   margin: 0.65rem 0 0;
-  color: #aaa;
+  color: #d4dbf5;
   line-height: 1.5;
 }
 
@@ -531,7 +549,7 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  background-color: #111;
+  background-color: rgba(23, 28, 50, 0.94);
   padding: 0.9rem 1rem;
   border-radius: 18px;
   border: 1px solid rgba(255,255,255,0.08);
@@ -557,9 +575,9 @@ button:disabled {
 }
 
 .back-btn {
-  background-color: transparent;
-  border: 1px solid var(--primary-color);
-  color: var(--primary-color);
+  background: rgba(96, 224, 255, 0.18);
+  border: 1px solid rgba(96, 224, 255, 0.45);
+  color: #f8fbff;
   margin-bottom: 2rem;
   width: auto;
   padding: 0.85rem 1.5rem;
@@ -567,7 +585,7 @@ button:disabled {
 }
 
 .back-btn:hover {
-  background-color: rgba(96, 224, 255, 0.12);
+  background: rgba(96, 224, 255, 0.28);
 }
 
 @media (max-width: 900px) {

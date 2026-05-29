@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
-export default function Profile({ session }) {
+export default function Profile({ session, onSessionRefresh, onAvatarUpdate }) {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
@@ -73,10 +73,17 @@ export default function Profile({ session }) {
       const { data } = supabase.storage.from('avatars').getPublicUrl(filePath)
       const publicUrl = data.publicUrl
       setAvatarUrl(publicUrl)
+      if (onAvatarUpdate) {
+        onAvatarUpdate(publicUrl)
+      }
       
       await supabase.auth.updateUser({
         data: { avatar_url: publicUrl }
       })
+
+      if (onSessionRefresh) {
+        await onSessionRefresh()
+      }
       
       alert("Image de profil mise à jour.")
 
@@ -107,8 +114,6 @@ export default function Profile({ session }) {
       <h2 style={{ marginTop: 0, marginBottom: '2rem' }}>Mon Profil</h2>
 
       <div className="profile-layout">
-        
-        {/* Je crée la colonne dédiée à l'identité visuelle de l'utilisateur */}
         <div className="profile-section">
           <h3>Photo de profil</h3>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -116,7 +121,7 @@ export default function Profile({ session }) {
               <img src={avatarUrl} alt="Avatar" className="avatar-preview" style={{ width: '150px', height: '150px', marginBottom: '1.5rem' }} />
             ) : (
               <div className="avatar-preview" style={{ width: '150px', height: '150px', backgroundColor: '#444', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
-                <span style={{ fontSize: '3rem', color: '#888' }}>?</span>
+                <span style={{ fontSize: '3rem', color: '#c7d0ff' }}>?</span>
               </div>
             )}
             <input
@@ -126,11 +131,10 @@ export default function Profile({ session }) {
               disabled={uploadingAvatar}
               style={{ padding: '0.5rem', backgroundColor: 'transparent', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer' }}
             />
-            {uploadingAvatar && <p style={{ marginTop: '1rem', color: '#aaa' }}>Chargement de l'image en cours...</p>}
+            {uploadingAvatar && <p style={{ marginTop: '1rem', color: 'var(--secondary-text)' }}>Chargement de l'image en cours...</p>}
           </div>
         </div>
 
-        {/* Je crée la colonne dédiée à la sécurité et aux actions de gestion de compte */}
         <div className="profile-section">
           <h3>Sécurité & Authentification</h3>
           <form onSubmit={handleUpdatePassword} style={{ marginBottom: '2rem', flex: 1 }}>
@@ -167,13 +171,12 @@ export default function Profile({ session }) {
             
             <button 
               onClick={handleDeleteAccount} 
-              style={{ backgroundColor: 'transparent', border: '1px solid #d32f2f', color: '#d32f2f' }}
+              style={{ background: 'transparent', border: '1px solid #d32f2f', color: '#d32f2f' }}
             >
               Supprimer mon compte
             </button>
           </div>
         </div>
-
       </div>
     </div>
   )

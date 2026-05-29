@@ -401,8 +401,8 @@ export default function AddDrama({ session }) {
             value={searchQuery} 
             onChange={(e) => setSearchQuery(e.target.value)} 
           />
-          {isSearching && !isTranslating && <span style={{ fontSize: '0.9rem', color: '#888', whiteSpace: 'nowrap' }}>Recherche...</span>}
-          {isTranslating && <span style={{ fontSize: '0.9rem', color: '#ccc', whiteSpace: 'nowrap' }}>Traduction en cours... {translationProgress}%</span>}
+          {isSearching && !isTranslating && <span style={{ fontSize: '0.9rem', color: '#c7d0ff', whiteSpace: 'nowrap' }}>Recherche...</span>}
+          {isTranslating && <span style={{ fontSize: '0.9rem', color: 'var(--secondary-text)', whiteSpace: 'nowrap' }}>Traduction en cours... {translationProgress}%</span>}
         </div>
         
         {searchResults.length > 0 && (
@@ -431,7 +431,7 @@ export default function AddDrama({ session }) {
                   />
                 ) : (
                   <div style={{ width: '45px', height: '68px', backgroundColor: '#333', borderRadius: '4px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ fontSize: '0.7rem', color: '#888' }}>Pas d'image</span>
+                    <span style={{ fontSize: '0.7rem', color: '#c7d0ff' }}>Pas d'image</span>
                   </div>
                 )}
                 
@@ -439,7 +439,7 @@ export default function AddDrama({ session }) {
                   <strong style={{ color: '#fff', fontSize: '1rem', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
                     {result.displayName}
                   </strong>
-                  <span style={{ color: '#aaa', fontSize: '0.85rem' }}>
+                  <span style={{ color: 'var(--secondary-text)', fontSize: '0.85rem' }}>
                     {result.first_air_date ? result.first_air_date.substring(0, 4) : 'Date inconnue'}
                   </span>
                 </div>
@@ -455,7 +455,7 @@ export default function AddDrama({ session }) {
             <div>
               <h2 style={{ margin: 0, color: 'var(--primary-color)' }}>{selectedDramaDetails.displayName}</h2>
               {selectedDramaDetails.displayOriginalName && selectedDramaDetails.displayOriginalName !== selectedDramaDetails.displayName && (
-                <p style={{ margin: '0.35rem 0 0', color: '#aaa' }}>Original : {selectedDramaDetails.displayOriginalName}</p>
+                <p style={{ margin: '0.35rem 0 0', color: 'var(--secondary-text)' }}>Original : {selectedDramaDetails.displayOriginalName}</p>
               )}
             </div>
             <button
@@ -472,25 +472,25 @@ export default function AddDrama({ session }) {
               {selectedDramaDetails.poster_path ? (
                 <img src={`https://image.tmdb.org/t/p/w500${selectedDramaDetails.poster_path}`} alt={selectedDramaDetails.displayName} style={{ width: '100%', borderRadius: '12px', marginBottom: '1rem' }} />
               ) : (
-                <div style={{ width: '100%', minHeight: '280px', backgroundColor: '#222', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', marginBottom: '1rem' }}>Pas d'image</div>
+                <div style={{ width: '100%', minHeight: '280px', backgroundColor: '#222', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c7d0ff', marginBottom: '1rem' }}>Pas d'image</div>
               )}
 
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
                 {selectedDramaDetails.genres.map((genre) => (
-                  <span key={genre.id} style={{ backgroundColor: '#222', color: '#aaa', padding: '0.4rem 0.8rem', borderRadius: '999px', fontSize: '0.85rem' }}>{genre.name}</span>
+                  <span key={genre.id} style={{ backgroundColor: '#222', color: 'var(--secondary-text)', padding: '0.4rem 0.8rem', borderRadius: '999px', fontSize: '0.85rem' }}>{genre.name}</span>
                 ))}
               </div>
             </div>
 
             <div style={{ display: 'grid', gap: '0.75rem' }}>
-              <div style={{ color: '#aaa' }}>Statut : <strong style={{ color: '#fff' }}>{selectedDramaDetails.status || 'Inconnu'}</strong></div>
-              <div style={{ color: '#aaa' }}>Premier épisode : <strong style={{ color: '#fff' }}>{selectedDramaDetails.first_air_date ? new Date(selectedDramaDetails.first_air_date).toLocaleDateString('fr-FR') : 'Inconnue'}</strong></div>
-              <div style={{ color: '#aaa' }}>Saisons : <strong style={{ color: '#fff' }}>{selectedDramaDetails.number_of_seasons ?? '–'}</strong></div>
-              <div style={{ color: '#aaa' }}>Épisodes : <strong style={{ color: '#fff' }}>{selectedDramaDetails.number_of_episodes ?? '–'}</strong></div>
-              <div style={{ color: '#aaa' }}>Langue : <strong style={{ color: '#fff' }}>{translateLanguageCode(selectedDramaDetails.original_language)}</strong></div>
-              <div style={{ color: '#aaa' }}>Note TMDB : <strong style={{ color: '#fff' }}>{selectedDramaDetails.vote_average ? `${selectedDramaDetails.vote_average.toFixed(1)}/10` : '–'}</strong></div>
+              <div style={{ color: 'var(--secondary-text)' }}>Statut : <strong style={{ color: '#fff' }}>{selectedDramaDetails.status || 'Inconnu'}</strong></div>
+              <div style={{ color: 'var(--secondary-text)' }}>Premier épisode : <strong style={{ color: '#fff' }}>{selectedDramaDetails.first_air_date ? new Date(selectedDramaDetails.first_air_date).toLocaleDateString('fr-FR') : 'Inconnue'}</strong></div>
+              <div style={{ color: 'var(--secondary-text)' }}>Saisons : <strong style={{ color: '#fff' }}>{selectedDramaDetails.number_of_seasons ?? '–'}</strong></div>
+              <div style={{ color: 'var(--secondary-text)' }}>Épisodes : <strong style={{ color: '#fff' }}>{selectedDramaDetails.number_of_episodes ?? '–'}</strong></div>
+              <div style={{ color: 'var(--secondary-text)' }}>Langue : <strong style={{ color: '#fff' }}>{translateLanguageCode(selectedDramaDetails.original_language)}</strong></div>
+              <div style={{ color: 'var(--secondary-text)' }}>Note TMDB : <strong style={{ color: '#fff' }}>{selectedDramaDetails.vote_average ? `${selectedDramaDetails.vote_average.toFixed(1)}/10` : '–'}</strong></div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                <label style={{ color: '#aaa', fontSize: '0.88rem' }} htmlFor="voir-drama-rating">Note VoirDrama</label>
+                <label style={{ color: 'var(--secondary-text)', fontSize: '0.88rem' }} htmlFor="voir-drama-rating">Note VoirDrama</label>
                 <input
                   id="voir-drama-rating"
                   type="number"
@@ -506,7 +506,7 @@ export default function AddDrama({ session }) {
             </div>
           </div>
 
-          <div style={{ marginBottom: '1.5rem', color: '#ddd', lineHeight: '1.8' }}>
+          <div style={{ marginBottom: '1.5rem', color: 'var(--secondary-text)', lineHeight: '1.8' }}>
             <h3 style={{ margin: '0 0 0.75rem 0', color: '#fff' }}>Synopsis</h3>
             <p style={{ margin: 0 }}>{selectedDramaDetails.displayOverview || 'Aucun synopsis disponible.'}</p>
           </div>
@@ -520,11 +520,11 @@ export default function AddDrama({ session }) {
             {addingDrama ? 'Ajout en cours...' : 'Ajouter à la liste À voir'}
           </button>
 
-          {addMessage && <div style={{ marginTop: '1rem', color: '#ccc' }}>{addMessage}</div>}
+          {addMessage && <div style={{ marginTop: '1rem', color: 'var(--secondary-text)' }}>{addMessage}</div>}
         </div>
       ) : (
         <div>
-          <p style={{ color: '#aaa', marginBottom: '1rem' }}>Recherchez un drama et cliquez dessus pour voir toutes les informations avant de l'ajouter à votre liste.</p>
+          <p style={{ color: 'var(--secondary-text)', marginBottom: '1rem' }}>Recherchez un drama et cliquez dessus pour voir toutes les informations avant de l'ajouter à votre liste.</p>
         </div>
       )}
     </div>

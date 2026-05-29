@@ -71,7 +71,7 @@ export default function Auth() {
       
       <button 
         onClick={() => setIsSignUp(!isSignUp)} 
-        style={{ marginTop: '1rem', backgroundColor: 'transparent', border: '1px solid var(--primary-color)', color: 'var(--primary-color)' }}
+        style={{ marginTop: '1rem', background: 'transparent', border: '1px solid var(--primary-color)', color: 'var(--primary-color)' }}
       >
         {isSignUp ? 'Déjà un compte ? Se connecter' : "Pas de compte ? S'inscrire"}
       </button>

@@ -105,7 +105,7 @@ export default function DramaList({ session, status, onSelectDrama }) {
   }
 
   if (dramas.length === 0) {
-    return <div style={{ textAlign: 'center', marginTop: '3rem', color: '#aaa', fontSize: '1.2rem' }}>Aucune série trouvée dans cette catégorie.</div>
+    return <div style={{ textAlign: 'center', marginTop: '3rem', color: 'var(--secondary-text)', fontSize: '1.2rem' }}>Aucune série trouvée dans cette catégorie.</div>
   }
 
   return (
@@ -122,10 +122,9 @@ export default function DramaList({ session, status, onSelectDrama }) {
               <img src={drama.poster_url} alt={drama.title} className="drama-poster" />
             ) : (
               <div className="drama-poster" style={{ backgroundColor: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ color: '#888' }}>Pas d'image</span>
+                <span style={{ color: '#c7d0ff' }}>Pas d'image</span>
               </div>
             )}
-            
             <div className="drama-info">
               <h4 className="drama-title" title={drama.title}>{drama.title}</h4>
               <div className="drama-genres">{drama.genre || 'Aucun genre spécifié'}</div>
@@ -138,11 +137,11 @@ export default function DramaList({ session, status, onSelectDrama }) {
               {status === 'Watched' && drama.personal_rating && (
                 <div style={{ marginTop: '1rem', padding: '0.8rem', backgroundColor: '#1a1a1a', borderRadius: '8px', borderLeft: '3px solid var(--primary-color)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                    <span style={{ fontSize: '0.85rem', color: '#aaa', textTransform: 'uppercase', letterSpacing: '1px' }}>Ma Note</span>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--secondary-text)', textTransform: 'uppercase', letterSpacing: '1px' }}>Ma Note</span>
                     <strong style={{ color: 'var(--primary-color)', fontSize: '1.1rem' }}>{drama.personal_rating} / 5</strong>
                   </div>
                   {drama.comment && (
-                    <div style={{ fontSize: '0.9rem', color: '#ddd', fontStyle: 'italic', lineHeight: '1.4' }}>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--secondary-text)', fontStyle: 'italic', lineHeight: '1.4' }}>
                       "{drama.comment}"
                     </div>
                   )}
