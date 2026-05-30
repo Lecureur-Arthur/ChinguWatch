@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
+import { translateLongText } from './translationService'
 
 export default function AddDrama({ session }) {
   const [searchQuery, setSearchQuery] = useState('')
@@ -171,53 +172,6 @@ export default function AddDrama({ session }) {
     }
   }
 
-  const translateLongText = async (text) => {
-    if (!text) return ''
-
-    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]
-    let chunks = []
-    let currentChunk = ''
-
-    for (let sentence of sentences) {
-      if ((currentChunk + sentence).length < 450) {
-        currentChunk += sentence + ' '
-      } else {
-        chunks.push(currentChunk.trim())
-        currentChunk = sentence + ' '
-      }
-    }
-    if (currentChunk) chunks.push(currentChunk.trim())
-
-    let finalTranslation = ''
-    const totalChunks = chunks.length
-
-    setIsTranslating(true)
-    setTranslationProgress(0)
-
-    for (let i = 0; i < totalChunks; i++) {
-      let chunk = chunks[i]
-      try {
-        const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk)}&langpair=en|fr`)
-        const data = await response.json()
-        
-        if (data.responseData && data.responseData.translatedText && !data.responseData.translatedText.includes("QUERY LENGTH LIMIT")) {
-          finalTranslation += data.responseData.translatedText + ' '
-        } else {
-          finalTranslation += chunk + ' '
-        }
-      } catch (error) {
-        finalTranslation += chunk + ' '
-      }
-      
-      setTranslationProgress(Math.round(((i + 1) / totalChunks) * 100))
-    }
-
-    setIsTranslating(false)
-    setTranslationProgress(0)
-
-    return finalTranslation.trim()
-  }
-
   const selectDrama = async (dramaId, selectedTitle) => {
     setIsSearching(true)
     const apiKey = import.meta.env.VITE_TMDB_API_KEY
@@ -233,10 +187,16 @@ export default function AddDrama({ session }) {
 
       const displayName = getLatinText(dataFr.name || dataFr.original_name, dataEn?.name || dataEn?.original_name || dataFr.original_name)
       const displayOriginalName = getLatinText(dataFr.original_name, dataEn?.original_name || dataFr.name)
-      let currentSynopsis = dataFr.overview || dataEn.overview || ''
+      const frOverview = dataFr.overview
+      const enOverview = dataEn?.overview
+      let currentSynopsis = ''
 
-      if (!currentSynopsis && dataEn.overview) {
-        currentSynopsis = await translateLongText(dataEn.overview)
+      if (frOverview && enOverview && frOverview.trim() === enOverview.trim()) {
+        currentSynopsis = await translateLongText(enOverview)
+      } else if (frOverview) {
+        currentSynopsis = frOverview
+      } else if (enOverview) {
+        currentSynopsis = await translateLongText(enOverview)
       }
 
       setSelectedDramaDetails({

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import { translateLongText } from './translationService'
 
 export default function TmdbPreview({ tmdbId, onBack, session }) {
   const [details, setDetails] = useState(null)
@@ -21,42 +22,15 @@ export default function TmdbPreview({ tmdbId, onBack, session }) {
     return fallbackText
   }
 
-  const translateLongText = async (text, onProgress) => {
-    if (!text) return ''
-    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]
-    let chunks = []
-    let currentChunk = ''
-
-    for (let sentence of sentences) {
-      if ((currentChunk + sentence).length < 450) {
-        currentChunk += sentence + ' '
-      } else {
-        chunks.push(currentChunk.trim())
-        currentChunk = sentence + ' '
-      }
+  const translateTmdbStatus = (status) => {
+    const statusMap = {
+      'Ended': 'Fini',
+      'Returning Series': 'En cours de diffusion',
+      'Canceled': 'Annulé',
+      'In Production': 'En production',
+      'Pilot': 'Pilote'
     }
-    if (currentChunk) chunks.push(currentChunk.trim())
-
-    let finalTranslation = ''
-    const totalChunks = chunks.length
-    for (let i = 0; i < totalChunks; i++) {
-      const chunk = chunks[i]
-      try {
-        const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk)}&langpair=en|fr`)
-        const data = await response.json()
-        if (data.responseData && data.responseData.translatedText && !data.responseData.translatedText.includes('QUERY LENGTH LIMIT')) {
-          finalTranslation += data.responseData.translatedText + ' '
-        } else {
-          finalTranslation += chunk + ' '
-        }
-      } catch (error) {
-        finalTranslation += chunk + ' '
-      }
-      if (typeof onProgress === 'function') {
-        onProgress(Math.round(((i + 1) / totalChunks) * 100))
-      }
-    }
-    return finalTranslation.trim()
+    return statusMap[status] || status
   }
 
   const fetchGenresAndDetails = async () => {
@@ -79,11 +53,19 @@ export default function TmdbPreview({ tmdbId, onBack, session }) {
 
       const displayName = getLatinText(detailsFr.name || detailsFr.original_name, detailsEn.name || detailsEn.original_name || detailsFr.original_name)
       const displayOriginalName = getLatinText(detailsFr.original_name, detailsEn.original_name || detailsFr.name)
-      let displayOverview = detailsFr.overview || detailsEn.overview || ''
+      const frOverview = detailsFr.overview
+      const enOverview = detailsEn.overview
+      let displayOverview = ''
 
-      if (!detailsFr.overview && detailsEn.overview) {
+      if (frOverview && enOverview && frOverview.trim() === enOverview.trim()) {
         setTranslating(true)
-        displayOverview = await translateLongText(detailsEn.overview, setTranslationProgress)
+        displayOverview = await translateLongText(enOverview, setTranslationProgress)
+        setTranslating(false)
+      } else if (frOverview) {
+        displayOverview = frOverview
+      } else if (enOverview) {
+        setTranslating(true)
+        displayOverview = await translateLongText(enOverview, setTranslationProgress)
         setTranslating(false)
       }
 
@@ -192,14 +174,14 @@ export default function TmdbPreview({ tmdbId, onBack, session }) {
             <p style={{ margin: '0 0 1.5rem 0', color: '#aaa' }}>Original : {details.displayOriginalName}</p>
           )}
 
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
-            <div style={{ backgroundColor: '#1a1a1a', padding: '0.8rem 1.2rem', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-              <div style={{ fontSize: '0.8rem', color: '#aaa', textTransform: 'uppercase' }}>Note TMDB</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--primary-color)' }}>{details.vote_average ? `${details.vote_average.toFixed(1)}/10` : '-'}</div>
+          <div className="detail-stats-row">
+            <div className="panel-card stat-card">
+              <span className="panel-label">Note TMDB</span>
+              <span className="panel-value">{details.vote_average ? `${details.vote_average.toFixed(1)}/10` : '-'}</span>
             </div>
-            <div style={{ backgroundColor: '#1a1a1a', padding: '0.8rem 1.2rem', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-              <div style={{ fontSize: '0.8rem', color: '#aaa', textTransform: 'uppercase' }}>Statut</div>
-              <div style={{ fontSize: '1.1rem', color: '#fff', marginTop: '0.2rem' }}>{details.status || 'Inconnu'}</div>
+            <div className="panel-card stat-card">
+              <span className="panel-label">Statut</span>
+              <span className="panel-value">{translateTmdbStatus(details.status) || 'Inconnu'}</span>
             </div>
           </div>
 

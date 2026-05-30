@@ -110,18 +110,18 @@ export default function Profile({ session, onSessionRefresh, onAvatarUpdate }) {
   }
 
   return (
-    <div className="form-container">
-      <h2 style={{ marginTop: 0, marginBottom: '2rem' }}>Mon Profil</h2>
+    <div className="form-container profile-page">
+      <h2>Mon Profil</h2>
 
       <div className="profile-layout">
         <div className="profile-section">
-          <h3>Photo de profil</h3>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <h3 className="profile-section-title">Photo de profil</h3>
+          <div className="profile-avatar-panel">
             {avatarUrl ? (
-              <img src={avatarUrl} alt="Avatar" className="avatar-preview" style={{ width: '150px', height: '150px', marginBottom: '1.5rem' }} />
+              <img src={avatarUrl} alt="Avatar" className="avatar-preview avatar-preview--large" />
             ) : (
-              <div className="avatar-preview" style={{ width: '150px', height: '150px', backgroundColor: '#444', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
-                <span style={{ fontSize: '3rem', color: '#c7d0ff' }}>?</span>
+              <div className="avatar-preview avatar-preview--large avatar-fallback-panel">
+                <span className="avatar-fallback">?</span>
               </div>
             )}
             <input
@@ -129,15 +129,15 @@ export default function Profile({ session, onSessionRefresh, onAvatarUpdate }) {
               accept="image/*"
               onChange={handleAvatarUpload}
               disabled={uploadingAvatar}
-              style={{ padding: '0.5rem', backgroundColor: 'transparent', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer' }}
+              className="file-input"
             />
-            {uploadingAvatar && <p style={{ marginTop: '1rem', color: 'var(--secondary-text)' }}>Chargement de l'image en cours...</p>}
+            {uploadingAvatar && <p className="upload-status">Chargement de l'image en cours...</p>}
           </div>
         </div>
 
         <div className="profile-section">
-          <h3>Sécurité & Authentification</h3>
-          <form onSubmit={handleUpdatePassword} style={{ marginBottom: '2rem', flex: 1 }}>
+          <h3 className="profile-section-title">Sécurité & Authentification</h3>
+          <form onSubmit={handleUpdatePassword} className="profile-form">
             <input
               type="password"
               placeholder="Mot de passe actuel"
@@ -159,20 +159,16 @@ export default function Profile({ session, onSessionRefresh, onAvatarUpdate }) {
               onChange={(e) => setConfirmNewPassword(e.target.value)}
               required
             />
-            <button type="submit" disabled={loadingPassword} style={{ marginTop: '0.5rem' }}>
+            <button type="submit" disabled={loadingPassword}>
               {loadingPassword ? 'Mise à jour...' : 'Mettre à jour le mot de passe'}
             </button>
           </form>
 
-          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <button className="logout-btn" onClick={() => supabase.auth.signOut()} style={{ marginTop: '0' }}>
+          <div className="profile-actions">
+            <button className="logout-btn" onClick={() => supabase.auth.signOut()}>
               Se déconnecter
             </button>
-            
-            <button 
-              onClick={handleDeleteAccount} 
-              style={{ background: 'transparent', border: '1px solid #d32f2f', color: '#d32f2f' }}
-            >
+            <button className="danger-btn" onClick={handleDeleteAccount}>
               Supprimer mon compte
             </button>
           </div>

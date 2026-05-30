@@ -6,7 +6,7 @@ export default function DramaActeur({ actorId, onBack, onPreviewTmdb }) {
   const [actorCreditsLoading, setActorCreditsLoading] = useState(true)
   const [tvGenreList, setTvGenreList] = useState([])
   const [actorRatingFilter, setActorRatingFilter] = useState('')
-  const [actorGenreFilter, setActorGenreFilter] = useState('')
+  const [actorGenreFilter, setActorGenreFilter] = useState([])
 
   useEffect(() => {
     if (actorId) {
@@ -114,32 +114,44 @@ export default function DramaActeur({ actorId, onBack, onPreviewTmdb }) {
       </div>
 
       <div className="actor-modal-filters" style={{ marginBottom: '2rem' }}>
-        <div className="actor-modal-filter" style={{ gap: '0.75rem' }}>
-          <label style={{ color: 'var(--secondary-text)', marginRight: '0.4rem' }}>Note min.</label>
-          <input
-            type="number"
-            min="0"
-            max="10"
-            step="0.1"
-            value={actorRatingFilter}
-            onChange={(e) => setActorRatingFilter(e.target.value)}
-            style={{ width: '100px', padding: '0.6rem', borderRadius: '8px', border: '1px solid #444', background: '#111', color: '#fff' }}
-            placeholder="0-10"
-          />
-        </div>
+        <div className="actor-modal-filter panel-card" style={{ gap: '1.5rem', flexDirection: 'column' }}>
+          <div>
+            <span className="panel-label">Note min.</span>
+            <input
+              type="number"
+              min="0"
+              max="10"
+              step="0.1"
+              value={actorRatingFilter}
+              onChange={(e) => setActorRatingFilter(e.target.value)}
+              className="status-select"
+              style={{ maxWidth: '120px' }}
+              placeholder="0-10"
+            />
+          </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', backgroundColor: '#111', padding: '0.9rem 1rem', borderRadius: '12px', border: '1px solid #333' }}>
-          <label style={{ color: 'var(--secondary-text)' }}>Genre</label>
-          <select
-            value={actorGenreFilter}
-            onChange={(e) => setActorGenreFilter(e.target.value)}
-            style={{ padding: '0.6rem', borderRadius: '8px', border: '1px solid #444', background: '#111', color: '#fff', minWidth: '180px' }}
-          >
-            <option value="">Tous</option>
-            {tvGenreList.map((genre) => (
-              <option key={genre.id} value={genre.id}>{genre.name}</option>
-            ))}
-          </select>
+          <div>
+            <span className="panel-label">Genres</span>
+            <div className="genres-container" style={{ maxHeight: '220px', overflowY: 'auto', padding: '0.5rem' }}>
+              {tvGenreList.map((genre) => (
+                <button
+                  key={genre.id}
+                  type="button"
+                  className={`genre-btn ${actorGenreFilter.includes(String(genre.id)) ? 'active' : ''}`}
+                  onClick={() => {
+                    const genreId = String(genre.id)
+                    setActorGenreFilter((prev) =>
+                      prev.includes(genreId)
+                        ? prev.filter((id) => id !== genreId)
+                        : [...prev, genreId]
+                    )
+                  }}
+                >
+                  {genre.name}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -149,8 +161,11 @@ export default function DramaActeur({ actorId, onBack, onPreviewTmdb }) {
             if (actorRatingFilter && parseFloat(credit.vote_average || 0) < parseFloat(actorRatingFilter)) {
               return false
             }
-            if (actorGenreFilter && !credit.genre_ids?.includes(parseInt(actorGenreFilter))) {
-              return false
+            if (actorGenreFilter.length > 0) {
+              const selectedIds = actorGenreFilter.map((genreId) => parseInt(genreId, 10))
+              if (!selectedIds.some((genreId) => credit.genre_ids?.includes(genreId))) {
+                return false
+              }
             }
             return true
           })

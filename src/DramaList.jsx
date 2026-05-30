@@ -176,7 +176,8 @@ export default function DramaList({ session, status, onSelectDrama }) {
                   <select 
                     value={drama.status} 
                     onChange={(e) => handleStatusChange(drama, e.target.value, e)} 
-                    style={{ marginTop: '1rem', padding: '0.5rem', fontSize: '0.9rem' }}
+                    className="status-select"
+                    style={{ marginTop: '1rem' }}
                   >
                     <option value="To Watch">À voir</option>
                     <option value="Watching">En cours</option>
