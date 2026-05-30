@@ -105,6 +105,24 @@ export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
         const detailDataEn = await detailResEn.json()
         setTmdbData(detailDataFr)
 
+        // Sauvegarde silencieuse en arrière-plan pour migrer les anciens dramas
+        if (dbData && dbData.cast_list === null) {
+          const frProviders = detailDataFr?.['watch/providers']?.results?.FR
+          const allProviders = [...(frProviders?.flatrate || []), ...(frProviders?.free || [])]
+          const uniqueProviders = Array.from(new Map(allProviders.map(item => [item.provider_id, item])).values())
+          
+          await supabase.from('dramas').update({
+            tmdb_id: tmdbId,
+            tmdb_status: detailDataFr.status || null,
+            first_air_date: detailDataFr.first_air_date || null,
+            number_of_seasons: detailDataFr.number_of_seasons || null,
+            number_of_episodes: detailDataFr.number_of_episodes || null,
+            episode_run_time: detailDataFr.episode_run_time?.[0] || null,
+            cast_list: detailDataFr.credits?.cast?.slice(0, 15) || [],
+            watch_providers: uniqueProviders
+          }).eq('id', dramaId)
+        }
+
         const frOverview = detailDataFr.overview
         const enOverview = detailDataEn.overview
 

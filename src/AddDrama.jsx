@@ -21,7 +21,6 @@ export default function AddDrama({ session }) {
   const [addingDrama, setAddingDrama] = useState(false)
   const [addMessage, setAddMessage] = useState('')
   
-  // J'ajoute les états pour les nouveaux champs requis lors du passage en statut Vu
   const [personalRating, setPersonalRating] = useState('')
   const [comment, setComment] = useState('')
   
@@ -178,8 +177,8 @@ export default function AddDrama({ session }) {
 
     try {
       const [responseFr, responseEn] = await Promise.all([
-        fetch(`https://api.themoviedb.org/3/tv/${dramaId}?language=fr-FR&api_key=${apiKey}`),
-        fetch(`https://api.themoviedb.org/3/tv/${dramaId}?language=en-US&api_key=${apiKey}`)
+        fetch(`https://api.themoviedb.org/3/tv/${dramaId}?language=fr-FR&append_to_response=credits,watch/providers&api_key=${apiKey}`),
+        fetch(`https://api.themoviedb.org/3/tv/${dramaId}?language=en-US&append_to_response=credits,watch/providers&api_key=${apiKey}`)
       ])
 
       const dataFr = await responseFr.json()
@@ -199,6 +198,15 @@ export default function AddDrama({ session }) {
         currentSynopsis = await translateLongText(enOverview)
       }
 
+      const getWatchProviders = (data) => {
+        if (!data?.['watch/providers']?.results?.FR) return []
+        const frProviders = data['watch/providers'].results.FR
+        const flatrate = frProviders.flatrate || []
+        const free = frProviders.free || []
+        const allProviders = [...flatrate, ...free]
+        return Array.from(new Map(allProviders.map(item => [item.provider_id, item])).values())
+      }
+
       setSelectedDramaDetails({
         id: dramaId,
         displayName,
@@ -214,7 +222,10 @@ export default function AddDrama({ session }) {
         poster_path: dataFr.poster_path,
         overview: dataFr.overview || dataEn.overview || '',
         name: dataFr.name,
-        original_name: dataFr.original_name
+        original_name: dataFr.original_name,
+        cast_list: dataFr.credits?.cast?.slice(0, 15) || [],
+        watch_providers: getWatchProviders(dataFr),
+        episode_run_time: dataFr.episode_run_time?.[0] || null
       })
 
       setSearchResults([])
@@ -281,7 +292,15 @@ export default function AddDrama({ session }) {
           synopsis: selectedDramaDetails.displayOverview || selectedDramaDetails.overview || '',
           status: 'To Watch',
           poster_url: posterUrl,
-          user_id: userId
+          user_id: userId,
+          tmdb_id: selectedDramaDetails.id,
+          tmdb_status: selectedDramaDetails.status || null,
+          first_air_date: selectedDramaDetails.first_air_date || null,
+          number_of_seasons: selectedDramaDetails.number_of_seasons || null,
+          number_of_episodes: selectedDramaDetails.number_of_episodes || null,
+          episode_run_time: selectedDramaDetails.episode_run_time || null,
+          cast_list: selectedDramaDetails.cast_list || [],
+          watch_providers: selectedDramaDetails.watch_providers || []
         }
       ])
 
@@ -302,7 +321,6 @@ export default function AddDrama({ session }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    // Je vérifie manuellement que la note est présente si le statut est Vu
     if (status === 'Watched' && !personalRating) {
       alert("La note personnelle est obligatoire pour une série vue.")
       return
@@ -312,7 +330,6 @@ export default function AddDrama({ session }) {
 
     const finalGenres = selectedGenres.join(', ')
 
-    // J'intègre les nouveaux champs dans l'insertion
     const { error } = await supabase
       .from('dramas')
       .insert([
@@ -326,7 +343,14 @@ export default function AddDrama({ session }) {
           synopsis,
           status,
           poster_url: posterUrl,
-          user_id: session.user.id
+          user_id: session.user.id,
+          tmdb_status: null,
+          first_air_date: null,
+          number_of_seasons: null,
+          number_of_episodes: null,
+          episode_run_time: null,
+          cast_list: null,
+          watch_providers: null
         }
       ])
 

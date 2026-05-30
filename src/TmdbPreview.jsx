@@ -112,6 +112,15 @@ export default function TmdbPreview({ tmdbId, onBack, session }) {
       const genreString = details.genres?.map((genre) => genre.name).join(', ') || ''
       const posterUrl = details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : null
       const siteRating = details.vote_average ? parseFloat(details.vote_average.toFixed(1)) : null
+      
+      const getWatchProviders = () => {
+        if (!details?.['watch/providers']?.results?.FR) return []
+        const frProviders = details['watch/providers'].results.FR
+        const flatrate = frProviders.flatrate || []
+        const free = frProviders.free || []
+        const allProviders = [...flatrate, ...free]
+        return Array.from(new Map(allProviders.map(item => [item.provider_id, item])).values())
+      }
 
       const { error: insertError } = await supabase.from('dramas').insert([
         {
@@ -125,7 +134,14 @@ export default function TmdbPreview({ tmdbId, onBack, session }) {
           status: 'To Watch',
           poster_url: posterUrl,
           user_id: userId,
-          tmdb_id: tmdbId
+          tmdb_id: tmdbId,
+          tmdb_status: details.status || null,
+          first_air_date: details.first_air_date || null,
+          number_of_seasons: details.number_of_seasons || null,
+          number_of_episodes: details.number_of_episodes || null,
+          episode_run_time: details.episode_run_time?.[0] || null,
+          cast_list: details.credits?.cast?.slice(0, 15) || [],
+          watch_providers: getWatchProviders()
         }
       ])
 
