@@ -434,10 +434,10 @@ export default function AddDrama({ session }) {
       </div>
 
       {selectedDramaDetails ? (
-        <div style={{ marginTop: '1rem', padding: '1rem', borderRadius: '12px', border: '1px solid var(--border-color)', backgroundColor: '#1a1a1a', width: '100%', maxWidth: '1000px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+        <div className="panel-card" style={{ marginTop: '1rem', width: '100%', maxWidth: '1000px' }}>
+          <div className="detail-top-row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
             <div>
-              <h2 style={{ margin: 0, color: 'var(--primary-color)' }}>{selectedDramaDetails.displayName}</h2>
+              <h2 style={{ margin: 0, color: 'var(--primary-color)', fontSize: '2rem' }}>{selectedDramaDetails.displayName}</h2>
               {selectedDramaDetails.displayOriginalName && selectedDramaDetails.displayOriginalName !== selectedDramaDetails.displayName && (
                 <p style={{ margin: '0.35rem 0 0', color: 'var(--secondary-text)' }}>Original : {selectedDramaDetails.displayOriginalName}</p>
               )}
@@ -445,36 +445,72 @@ export default function AddDrama({ session }) {
             <button
               type="button"
               onClick={handleBackToSearch}
-              style={{ border: '1px solid var(--primary-color)', backgroundColor: 'transparent', color: 'var(--primary-color)', borderRadius: '999px', padding: '0.8rem 1.2rem', cursor: 'pointer' }}
+              className="secondary-btn"
+              style={{ height: 'fit-content', padding: '0.85rem 1.25rem' }}
             >
               Retour à la recherche
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr) 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
             <div>
               {selectedDramaDetails.poster_path ? (
-                <img src={`https://image.tmdb.org/t/p/w500${selectedDramaDetails.poster_path}`} alt={selectedDramaDetails.displayName} style={{ width: '100%', borderRadius: '12px', marginBottom: '1rem' }} />
+                <img
+                  src={`https://image.tmdb.org/t/p/w500${selectedDramaDetails.poster_path}`}
+                  alt={selectedDramaDetails.displayName}
+                  style={{ width: '100%', borderRadius: '18px', marginBottom: '1rem', boxShadow: '0 20px 40px rgba(0,0,0,0.35)' }}
+                />
               ) : (
-                <div style={{ width: '100%', minHeight: '280px', backgroundColor: '#222', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c7d0ff', marginBottom: '1rem' }}>Pas d'image</div>
+                <div style={{ width: '100%', minHeight: '320px', backgroundColor: '#151515', borderRadius: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#60e0ff', marginBottom: '1rem' }}>
+                  Pas d'image
+                </div>
               )}
 
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
-                {selectedDramaDetails.genres.map((genre) => (
-                  <span key={genre.id} style={{ backgroundColor: '#222', color: 'var(--secondary-text)', padding: '0.4rem 0.8rem', borderRadius: '999px', fontSize: '0.85rem' }}>{genre.name}</span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                {selectedDramaDetails.genres?.map((genre) => (
+                  <span
+                    key={genre.id}
+                    style={{
+                      backgroundColor: 'rgba(96, 224, 255, 0.08)',
+                      color: '#c7d0ff',
+                      padding: '0.45rem 0.9rem',
+                      borderRadius: '999px',
+                      fontSize: '0.85rem'
+                    }}
+                  >
+                    {genre.name}
+                  </span>
                 ))}
               </div>
             </div>
 
-            <div style={{ display: 'grid', gap: '0.75rem' }}>
-              <div style={{ color: 'var(--secondary-text)' }}>Statut : <strong style={{ color: '#fff' }}>{selectedDramaDetails.status || 'Inconnu'}</strong></div>
-              <div style={{ color: 'var(--secondary-text)' }}>Premier épisode : <strong style={{ color: '#fff' }}>{selectedDramaDetails.first_air_date ? new Date(selectedDramaDetails.first_air_date).toLocaleDateString('fr-FR') : 'Inconnue'}</strong></div>
-              <div style={{ color: 'var(--secondary-text)' }}>Saisons : <strong style={{ color: '#fff' }}>{selectedDramaDetails.number_of_seasons ?? '–'}</strong></div>
-              <div style={{ color: 'var(--secondary-text)' }}>Épisodes : <strong style={{ color: '#fff' }}>{selectedDramaDetails.number_of_episodes ?? '–'}</strong></div>
-              <div style={{ color: 'var(--secondary-text)' }}>Langue : <strong style={{ color: '#fff' }}>{translateLanguageCode(selectedDramaDetails.original_language)}</strong></div>
-              <div style={{ color: 'var(--secondary-text)' }}>Note TMDB : <strong style={{ color: '#fff' }}>{selectedDramaDetails.vote_average ? `${selectedDramaDetails.vote_average.toFixed(1)}/10` : '–'}</strong></div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                <label style={{ color: 'var(--secondary-text)', fontSize: '0.88rem' }} htmlFor="voir-drama-rating">Note VoirDrama</label>
+            <div style={{ display: 'grid', gap: '0.85rem' }}>
+              <div className="panel-card stat-card" style={{ padding: '1rem' }}>
+                <span className="panel-label">Statut</span>
+                <div className="panel-value">{selectedDramaDetails.status || 'Inconnu'}</div>
+              </div>
+              <div className="panel-card stat-card" style={{ padding: '1rem' }}>
+                <span className="panel-label">Première diffusion</span>
+                <div className="panel-value">{selectedDramaDetails.first_air_date ? new Date(selectedDramaDetails.first_air_date).toLocaleDateString('fr-FR') : 'Inconnue'}</div>
+              </div>
+              <div className="panel-card stat-card" style={{ padding: '1rem' }}>
+                <span className="panel-label">Saisons</span>
+                <div className="panel-value">{selectedDramaDetails.number_of_seasons ?? '–'}</div>
+              </div>
+              <div className="panel-card stat-card" style={{ padding: '1rem' }}>
+                <span className="panel-label">Épisodes</span>
+                <div className="panel-value">{selectedDramaDetails.number_of_episodes ?? '–'}</div>
+              </div>
+              <div className="panel-card stat-card" style={{ padding: '1rem' }}>
+                <span className="panel-label">Langue</span>
+                <div className="panel-value">{translateLanguageCode(selectedDramaDetails.original_language)}</div>
+              </div>
+              <div className="panel-card stat-card" style={{ padding: '1rem' }}>
+                <span className="panel-label">Note TMDB</span>
+                <div className="panel-value">{selectedDramaDetails.vote_average ? `${selectedDramaDetails.vote_average.toFixed(1)}/10` : '–'}</div>
+              </div>
+              <div className="panel-card" style={{ padding: '1rem' }}>
+                <label className="panel-label" htmlFor="voir-drama-rating">Note VoirDrama</label>
                 <input
                   id="voir-drama-rating"
                   type="number"
@@ -484,27 +520,31 @@ export default function AddDrama({ session }) {
                   value={voirDramaRating}
                   onChange={(e) => setVoirDramaRating(e.target.value)}
                   placeholder="0-5"
-                  style={{ padding: '0.75rem', borderRadius: '10px', border: '1px solid #444', backgroundColor: '#121212', color: '#fff' }}
+                  className="input-field"
+                  style={{ marginTop: '0.35rem' }}
                 />
               </div>
             </div>
           </div>
 
-          <div style={{ marginBottom: '1.5rem', color: 'var(--secondary-text)', lineHeight: '1.8' }}>
-            <h3 style={{ margin: '0 0 0.75rem 0', color: '#fff' }}>Synopsis</h3>
-            <p style={{ margin: 0 }}>{selectedDramaDetails.displayOverview || 'Aucun synopsis disponible.'}</p>
+          <div className="synopsis-card" style={{ marginBottom: '1.5rem' }}>
+            <span className="panel-label">Synopsis</span>
+            <p className="synopsis-text" style={{ margin: 0 }}>
+              {selectedDramaDetails.displayOverview || 'Aucun synopsis disponible.'}
+            </p>
           </div>
 
           <button
             type="button"
             onClick={addSelectedDramaToList}
             disabled={addingDrama}
-            style={{ width: '100%', padding: '1rem', borderRadius: '12px', border: 'none', backgroundColor: 'var(--primary-color)', color: '#000', fontWeight: '700', cursor: 'pointer' }}
+            className="primary-btn"
+            style={{ width: '100%', padding: '1rem', fontSize: '1rem' }}
           >
             {addingDrama ? 'Ajout en cours...' : 'Ajouter à la liste À voir'}
           </button>
 
-          {addMessage && <div style={{ marginTop: '1rem', color: 'var(--secondary-text)' }}>{addMessage}</div>}
+          {addMessage && <div className="info-text" style={{ marginTop: '1rem' }}>{addMessage}</div>}
         </div>
       ) : (
         <div>
