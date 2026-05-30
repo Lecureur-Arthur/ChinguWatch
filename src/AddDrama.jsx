@@ -161,6 +161,17 @@ export default function AddDrama({ session }) {
     return languageMap[code] || code || 'Inconnue'
   }
 
+  const translateStatus = (status) => {
+    const statusMap = {
+      Ended: 'Terminé',
+      'Returning Series': 'En cours de diffusion',
+      Canceled: 'Annulé',
+      'In Production': 'En production',
+      Pilot: 'Pilote'
+    }
+    return statusMap[status] || status || 'Inconnu'
+  }
+
   const toggleGenre = (genreName) => {
     if (apiGenres.includes(genreName)) return
 
@@ -211,7 +222,7 @@ export default function AddDrama({ session }) {
         id: dramaId,
         displayName,
         displayOriginalName,
-        status: dataFr.status,
+        status: translateStatus(dataFr.status),
         first_air_date: dataFr.first_air_date,
         number_of_episodes: dataFr.number_of_episodes,
         number_of_seasons: dataFr.number_of_seasons,
