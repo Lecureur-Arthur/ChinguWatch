@@ -690,6 +690,79 @@ button:disabled {
   height: 52px;
   border-radius: 12px;
   box-shadow: 0 4px 18px rgba(0,0,0,0.3);
+  transition: all 0.3s ease;
+}
+
+.provider-logo:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 24px rgba(96, 224, 255, 0.2);
+}
+
+.streaming-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border-radius: 12px;
+  border: 1px solid;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+  background-color: transparent;
+  cursor: pointer;
+}
+
+.streaming-badge:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+}
+
+.streaming-badge.netflix {
+  background-color: rgba(221, 0, 0, 0.15);
+  border-color: rgba(221, 0, 0, 0.3);
+  color: #ff4444;
+}
+
+.streaming-badge.netflix:hover {
+  background-color: rgba(221, 0, 0, 0.25);
+  border-color: rgba(221, 0, 0, 0.5);
+  box-shadow: 0 6px 18px rgba(221, 0, 0, 0.2);
+}
+
+.streaming-badge.prime-video {
+  background-color: rgba(0, 150, 255, 0.15);
+  border-color: rgba(0, 150, 255, 0.3);
+  color: #00aaff;
+}
+
+.streaming-badge.prime-video:hover {
+  background-color: rgba(0, 150, 255, 0.25);
+  border-color: rgba(0, 150, 255, 0.5);
+  box-shadow: 0 6px 18px rgba(0, 150, 255, 0.2);
+}
+
+.streaming-badge.disney-plus {
+  background-color: rgba(0, 200, 255, 0.15);
+  border-color: rgba(0, 200, 255, 0.3);
+  color: #00d4ff;
+}
+
+.streaming-badge.disney-plus:hover {
+  background-color: rgba(0, 200, 255, 0.25);
+  border-color: rgba(0, 200, 255, 0.5);
+  box-shadow: 0 6px 18px rgba(0, 200, 255, 0.2);
+}
+
+.streaming-badge.apple-tv {
+  background-color: rgba(150, 150, 150, 0.15);
+  border-color: rgba(150, 150, 150, 0.3);
+  color: #cccccc;
+}
+
+.streaming-badge.apple-tv:hover {
+  background-color: rgba(150, 150, 150, 0.25);
+  border-color: rgba(150, 150, 150, 0.5);
+  box-shadow: 0 6px 18px rgba(150, 150, 150, 0.2);
 }
 
 .actor-modal {
