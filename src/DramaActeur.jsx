@@ -5,14 +5,71 @@ export default function DramaActeur({ actorId, onBack, onPreviewTmdb }) {
   const [actorCredits, setActorCredits] = useState(null)
   const [actorCreditsLoading, setActorCreditsLoading] = useState(true)
   const [tvGenreList, setTvGenreList] = useState([])
-  const [actorRatingFilter, setActorRatingFilter] = useState('')
   const [actorGenreFilter, setActorGenreFilter] = useState([])
+
+  const [availableGenres, setAvailableGenres] = useState([
+    'Action', 'Affaire', 'Amitié', 'Arts Martiaux', 'Aventure', 'BL', 'Comédie',
+    'Contexte Scolaire', 'Crime', 'Culinaire', 'Documentaire', 'Drame', 'Famille',
+    'Fantastique', 'Guerre', 'Historique', 'Horreur', 'Jeunesse', 'Judiciaire',
+    'Mature', 'Médical', 'Mélodrame', 'Militaire', 'Musique', 'Mystère', 'Politique',
+    'Psychologique', 'Romance', 'SF', 'Sitcom', 'Sport', 'Surnaturel', 'Thriller',
+    'Tokasatsu', 'Vie Quotidienne', 'Wuxia', 'Yuri'
+  ])
 
   useEffect(() => {
     if (actorId) {
       fetchActorDetails(actorId)
     }
   }, [actorId])
+
+  const normalizeGenres = (genresList) => {
+    const genreMapping = {
+      'Action & Adventure': ['Action', 'Aventure'],
+      'Science-Fiction & Fantastique': ['SF', 'Fantastique'],
+      'Sci-Fi & Fantasy': ['SF', 'Fantastique'],
+      'Familial': ['Famille'],
+      'Kids': ['Jeunesse'],
+      'War & Politics': ['Guerre', 'Politique']
+    }
+
+    let normalized = []
+    genresList.forEach(g => {
+      if (genreMapping[g]) {
+        normalized.push(...genreMapping[g])
+      } else {
+        normalized.push(g)
+      }
+    })
+    return normalized
+  }
+
+  useEffect(() => {
+    const fetchGenres = async () => {
+      try {
+        const apiKey = import.meta.env.VITE_TMDB_API_KEY
+        if (!apiKey) return
+
+        const response = await fetch(`https://api.themoviedb.org/3/genre/tv/list?language=fr-FR&api_key=${apiKey}`)
+        const data = await response.json()
+
+        if (data.genres) {
+          setTvGenreList(data.genres)
+          
+          const tmdbGenres = data.genres.map(g => g.name)
+          const normalizedTmdbGenres = normalizeGenres(tmdbGenres)
+          
+          setAvailableGenres(prevGenres => {
+            const combined = new Set([...prevGenres, ...normalizedTmdbGenres])
+            return Array.from(combined).sort((a, b) => a.localeCompare(b, 'fr'))
+          })
+        }
+      } catch (error) {
+        console.error("Erreur de récupération des genres", error)
+      }
+    }
+    
+    fetchGenres()
+  }, [])
 
   const getLatinDisplayName = (personDetails, fallbackName) => {
     const latinNamePattern = /^[A-Za-zÀ-ÖØ-öø-ÿ0-9 .,'\-()]+$/
@@ -38,22 +95,17 @@ export default function DramaActeur({ actorId, onBack, onPreviewTmdb }) {
 
     try {
       const apiKey = import.meta.env.VITE_TMDB_API_KEY
-      const [detailsRes, creditsResFr, creditsResEn, genresRes] = await Promise.all([
+      const [detailsRes, creditsResFr, creditsResEn] = await Promise.all([
         fetch(`https://api.themoviedb.org/3/person/${actorId}?language=fr-FR&api_key=${apiKey}`),
         fetch(`https://api.themoviedb.org/3/person/${actorId}/tv_credits?language=fr-FR&api_key=${apiKey}`),
-        fetch(`https://api.themoviedb.org/3/person/${actorId}/tv_credits?language=en-US&api_key=${apiKey}`),
-        tvGenreList.length === 0 ? fetch(`https://api.themoviedb.org/3/genre/tv/list?language=fr-FR&api_key=${apiKey}`) : Promise.resolve({ json: async () => ({ genres: tvGenreList }) })
+        fetch(`https://api.themoviedb.org/3/person/${actorId}/tv_credits?language=en-US&api_key=${apiKey}`)
       ])
 
       const detailsData = await detailsRes.json()
       const creditsDataFr = await creditsResFr.json()
       const creditsDataEn = await creditsResEn.json()
-      const genresData = await genresRes.json()
       
       setActorDetails(detailsData)
-      if (tvGenreList.length === 0 && Array.isArray(genresData.genres)) {
-        setTvGenreList(genresData.genres)
-      }
 
       const englishById = new Map((creditsDataEn.cast || []).map((credit) => [credit.credit_id || credit.id, credit]))
       if (creditsDataFr.cast) {
@@ -77,7 +129,7 @@ export default function DramaActeur({ actorId, onBack, onPreviewTmdb }) {
             if (scoreB !== scoreA) return scoreB - scoreA
             return (b.popularity || 0) - (a.popularity || 0)
           })
-          .slice(0, 20)
+        
         setActorCredits(sortedCredits)
       } else {
         setActorCredits([])
@@ -108,7 +160,7 @@ export default function DramaActeur({ actorId, onBack, onPreviewTmdb }) {
         <div>
           <h2 style={{ margin: 0, color: 'var(--primary-color)', fontSize: '2rem' }}>{getLatinDisplayName(actorDetails, actorDetails.name)}</h2>
           <p style={{ margin: '0.7rem 0 0', color: 'var(--secondary-text)' }}>
-            {actorCredits && actorCredits.length > 0 ? `${actorCredits.length} séries notables` : 'Aucun drama trouvé pour cet acteur.'}
+            {actorCredits && actorCredits.length > 0 ? `${actorCredits.length} séries` : 'Aucun drama trouvé pour cet acteur.'}
           </p>
         </div>
       </div>
@@ -116,38 +168,22 @@ export default function DramaActeur({ actorId, onBack, onPreviewTmdb }) {
       <div className="actor-modal-filters" style={{ marginBottom: '2rem' }}>
         <div className="actor-modal-filter panel-card" style={{ gap: '1.5rem', flexDirection: 'column' }}>
           <div>
-            <span className="panel-label">Note min.</span>
-            <input
-              type="number"
-              min="0"
-              max="10"
-              step="0.1"
-              value={actorRatingFilter}
-              onChange={(e) => setActorRatingFilter(e.target.value)}
-              className="status-select"
-              style={{ maxWidth: '120px' }}
-              placeholder="0-10"
-            />
-          </div>
-
-          <div>
             <span className="panel-label">Genres</span>
             <div className="genres-container" style={{ maxHeight: '220px', overflowY: 'auto', padding: '0.5rem' }}>
-              {tvGenreList.map((genre) => (
+              {availableGenres.map((genre) => (
                 <button
-                  key={genre.id}
+                  key={genre}
                   type="button"
-                  className={`genre-btn ${actorGenreFilter.includes(String(genre.id)) ? 'active' : ''}`}
+                  className={`genre-btn ${actorGenreFilter.includes(genre) ? 'active' : ''}`}
                   onClick={() => {
-                    const genreId = String(genre.id)
                     setActorGenreFilter((prev) =>
-                      prev.includes(genreId)
-                        ? prev.filter((id) => id !== genreId)
-                        : [...prev, genreId]
+                      prev.includes(genre)
+                        ? prev.filter((g) => g !== genre)
+                        : [...prev, genre]
                     )
                   }}
                 >
-                  {genre.name}
+                  {genre}
                 </button>
               ))}
             </div>
@@ -155,15 +191,17 @@ export default function DramaActeur({ actorId, onBack, onPreviewTmdb }) {
         </div>
       </div>
 
-      <div className="actor-results-grid">
+      <div className="drama-grid">
         {!actorCreditsLoading && actorCredits && actorCredits.length > 0 && actorCredits
           .filter((credit) => {
-            if (actorRatingFilter && parseFloat(credit.vote_average || 0) < parseFloat(actorRatingFilter)) {
-              return false
-            }
             if (actorGenreFilter.length > 0) {
-              const selectedIds = actorGenreFilter.map((genreId) => parseInt(genreId, 10))
-              if (!selectedIds.some((genreId) => credit.genre_ids?.includes(genreId))) {
+              // Mapper les noms de genres textuels aux genre_ids de l'API TMDB
+              const selectedGenreIds = actorGenreFilter.flatMap((genreName) => {
+                const tmdbGenres = tvGenreList.filter((g) => g.name === genreName)
+                return tmdbGenres.map((g) => g.id)
+              })
+              
+              if (!selectedGenreIds.some((genreId) => credit.genre_ids?.includes(genreId))) {
                 return false
               }
             }
@@ -175,7 +213,7 @@ export default function DramaActeur({ actorId, onBack, onPreviewTmdb }) {
               type="button"
               className="drama-card"
               onClick={() => onPreviewTmdb(credit.id)}
-              style={{ cursor: 'pointer', minHeight: '100%', border: 'none', background: '#111', textAlign: 'left', padding: 0 }}
+              style={{ cursor: 'pointer', border: 'none', padding: 0 }}
             >
               {credit.poster_path ? (
                 <img src={`https://image.tmdb.org/t/p/w185${credit.poster_path}`} alt={credit.name} className="drama-poster" />
@@ -185,19 +223,21 @@ export default function DramaActeur({ actorId, onBack, onPreviewTmdb }) {
                 </div>
               )}
               <div className="drama-info">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                  <h4 className="drama-title" title={credit.name}>{credit.name}</h4>
-                  <span style={{ backgroundColor: '#111', color: '#7c9cff', padding: '0.25rem 0.5rem', borderRadius: '6px', fontSize: '0.85rem' }}>{credit.vote_average ? `${credit.vote_average.toFixed(1)}/10` : '–'}</span>
+                <h4 className="drama-title" title={credit.name}>{credit.name}</h4>
+                <div className="drama-genres">Rôle : {credit.displayRole || credit.character || credit.job || 'Inconnu'}</div>
+                
+                <div className="drama-ratings">
+                  <span title="Note TMDB">TMDB : <span className="rating-badge">{credit.vote_average ? `${credit.vote_average.toFixed(1)}/10` : '-'}</span></span>
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.5rem' }}>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.75rem' }}>
                   {(credit.genre_ids || []).map((genreId) => {
                     const genre = tvGenreList.find((g) => g.id === genreId)
                     return genre ? (
-                      <span key={genreId} style={{ backgroundColor: '#222', color: 'var(--secondary-text)', padding: '0.2rem 0.45rem', borderRadius: '999px', fontSize: '0.75rem' }}>{genre.name}</span>
+                      <span key={genreId} style={{ backgroundColor: 'rgba(96, 224, 255, 0.12)', color: '#d8f7ff', padding: '0.25rem 0.5rem', borderRadius: '999px', fontSize: '0.8rem', fontWeight: '500' }}>{genre.name}</span>
                     ) : null
                   })}
                 </div>
-                <div className="drama-genres">Rôle : {credit.displayRole || credit.character || credit.job || 'Inconnu'}</div>
               </div>
             </button>
           ))}
