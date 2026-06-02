@@ -439,79 +439,61 @@ export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
             <h3 style={{ color: 'var(--primary-color)', margin: '0 0 1rem 0' }}>Où regarder</h3>
             
             {/* Affichage des principales plateformes */}
-            {(hasNetflix || hasPrimeVideo || hasDisneyPlus || hasAppleTV) ? (
-              <>
-                <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-                  {hasNetflix && (
-                    <button
-                      onClick={() => openLink(getStreamingLinks().netflix)}
-                      className="streaming-badge netflix"
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <span style={{ fontSize: '1.4rem' }}>🎬</span>
-                      <span>Netflix</span>
-                    </button>
-                  )}
-                  {hasPrimeVideo && (
-                    <button
-                      onClick={() => openLink(getStreamingLinks().primeVideo)}
-                      className="streaming-badge prime-video"
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <span style={{ fontSize: '1.4rem' }}>▶️</span>
-                      <span>Prime Video</span>
-                    </button>
-                  )}
-                  {hasDisneyPlus && (
-                    <button
-                      onClick={() => openLink(getStreamingLinks().disneyPlus)}
-                      className="streaming-badge disney-plus"
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <span style={{ fontSize: '1.4rem' }}>⭐</span>
-                      <span>Disney+</span>
-                    </button>
-                  )}
-                  {hasAppleTV && (
-                    <button
-                      onClick={() => openLink(getStreamingLinks().appleTV)}
-                      className="streaming-badge apple-tv"
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <span style={{ fontSize: '1.4rem' }}>🍎</span>
-                      <span>Apple TV</span>
-                    </button>
-                  )}
-                </div>
-                
-                {/* Affichage de tous les logos */}
-                <div className="providers-container">
-                  {providers.map(provider => (
-                    <img 
-                      key={provider.provider_id} 
-                      src={`https://image.tmdb.org/t/p/w45${provider.logo_path}`} 
-                      alt={provider.provider_name}
-                      title={provider.provider_name}
-                      className="provider-logo"
-                    />
-                  ))}
-                </div>
-              </>
-            ) : (
-              /* Si aucune plateforme principale n'est disponible, proposer VoirDrama */
+            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+              {hasNetflix && (
+                <button
+                  onClick={() => openLink(getStreamingLinks().netflix)}
+                  className="streaming-badge netflix"
+                  style={{ cursor: 'pointer' }}
+                >
+                  <span style={{ fontSize: '1.4rem' }}>🎬</span>
+                  <span>Netflix</span>
+                </button>
+              )}
+              {hasPrimeVideo && (
+                <button
+                  onClick={() => openLink(getStreamingLinks().primeVideo)}
+                  className="streaming-badge prime-video"
+                  style={{ cursor: 'pointer' }}
+                >
+                  <span style={{ fontSize: '1.4rem' }}>▶️</span>
+                  <span>Prime Video</span>
+                </button>
+              )}
+              {hasDisneyPlus && (
+                <button
+                  onClick={() => openLink(getStreamingLinks().disneyPlus)}
+                  className="streaming-badge disney-plus"
+                  style={{ cursor: 'pointer' }}
+                >
+                  <span style={{ fontSize: '1.4rem' }}>⭐</span>
+                  <span>Disney+</span>
+                </button>
+              )}
+              {hasAppleTV && (
+                <button
+                  onClick={() => openLink(getStreamingLinks().appleTV)}
+                  className="streaming-badge apple-tv"
+                  style={{ cursor: 'pointer' }}
+                >
+                  <span style={{ fontSize: '1.4rem' }}>🍎</span>
+                  <span>Apple TV</span>
+                </button>
+              )}
+              {/* VoirDrama toujours disponible */}
               <button
                 onClick={() => openLink(getStreamingLinks().voirDrama)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.75rem',
-                  padding: '1rem 1.5rem',
+                  padding: '0.75rem 1.25rem',
                   backgroundColor: 'rgba(96, 224, 255, 0.15)',
                   border: '1px solid rgba(96, 224, 255, 0.4)',
                   borderRadius: '12px',
                   color: '#60e0ff',
                   fontWeight: '600',
-                  fontSize: '1rem',
+                  fontSize: '0.95rem',
                   cursor: 'pointer',
                   transition: 'all 0.3s ease'
                 }}
@@ -524,9 +506,24 @@ export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
                   e.target.style.boxShadow = 'none'
                 }}
               >
-                <span style={{ fontSize: '1.5rem' }}>🔍</span>
-                <span>Rechercher sur VoirDrama</span>
+                <span style={{ fontSize: '1.2rem' }}>🔍</span>
+                <span>VoirDrama</span>
               </button>
+            </div>
+            
+            {/* Affichage de tous les logos si des plateformes principales sont disponibles */}
+            {(hasNetflix || hasPrimeVideo || hasDisneyPlus || hasAppleTV) && (
+              <div className="providers-container">
+                {providers.map(provider => (
+                  <img 
+                    key={provider.provider_id} 
+                    src={`https://image.tmdb.org/t/p/w45${provider.logo_path}`} 
+                    alt={provider.provider_name}
+                    title={provider.provider_name}
+                    className="provider-logo"
+                  />
+                ))}
+              </div>
             )}
           </div>
 
