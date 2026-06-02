@@ -1,0 +1,64 @@
+name: Deploy ChinguWatch to GitHub Pages
+
+# Je déclenche le déploiement automatique uniquement lors d'un push sur la branche principale
+on:
+  push:
+    branches:
+      - main
+
+# Je définis les permissions requises pour permettre à GitHub Actions de publier sur GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# J'annule les builds obsolètes en cours si un nouveau push est effectué entre-temps
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      # Je récupère l'ensemble du code source de mon dépôt pour le rendre accessible au workflow
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Je configure l'environnement Node.js en version stable avec la mise en cache de npm activée
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      # J'installe proprement mes dépendances à partir du fichier lock pour garantir la reproductibilité du build
+      - name: Install dependencies
+        run: npm ci
+
+      # Je compile mon application en injectant mes variables d'environnement secrètes requises par Vite
+      - name: Build application
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_TMDB_API_KEY: ${{ secrets.VITE_TMDB_API_KEY }}
+          VITE_DEEPL_API_KEY: ${{ secrets.VITE_DEEPL_API_KEY }}
+        run: npm run build
+
+      # Je prépare l'infrastructure GitHub Pages pour recevoir la publication
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      # Je téléverse le dossier dist généré par Vite en tant qu'artefact officiel de déploiement
+      - name: Upload production artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist'
+
+      # Je réalise le déploiement effectif de l'artefact sur l'environnement GitHub Pages
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
