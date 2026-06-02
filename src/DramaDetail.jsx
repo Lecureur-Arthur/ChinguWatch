@@ -275,6 +275,19 @@ export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 
+  const copyTitleAndOpenVoirDrama = () => {
+    const title = localDrama?.title || ''
+    // Copier le titre dans le presse-papiers
+    navigator.clipboard.writeText(title).then(() => {
+      // Ouvrir la page d'accueil de VoirDrama
+      window.open('https://voirdrama.to/', '_blank', 'noopener,noreferrer')
+    }).catch(err => {
+      console.error('Erreur lors de la copie:', err)
+      // Si la copie échoue, ouvrir juste VoirDrama
+      window.open('https://voirdrama.to/', '_blank', 'noopener,noreferrer')
+    })
+  }
+
   if (loading) {
     return <div style={{ textAlign: 'center', marginTop: '3rem', fontSize: '1.2rem' }}>Chargement des détails...</div>
   }
@@ -508,6 +521,36 @@ export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
               >
                 <span style={{ fontSize: '1.2rem' }}>🔍</span>
                 <span>VoirDrama</span>
+              </button>
+              {/* Copier titre et accueil VoirDrama */}
+              <button
+                onClick={copyTitleAndOpenVoirDrama}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  padding: '0.75rem 1.25rem',
+                  backgroundColor: 'rgba(143, 156, 255, 0.15)',
+                  border: '1px solid rgba(143, 156, 255, 0.4)',
+                  borderRadius: '12px',
+                  color: '#8f9cff',
+                  fontWeight: '600',
+                  fontSize: '0.95rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = 'rgba(143, 156, 255, 0.25)'
+                  e.target.style.boxShadow = '0 8px 24px rgba(143, 156, 255, 0.2)'
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = 'rgba(143, 156, 255, 0.15)'
+                  e.target.style.boxShadow = 'none'
+                }}
+                title="Copie le titre du drama et ouvre VoirDrama"
+              >
+                <span style={{ fontSize: '1.2rem' }}>📋</span>
+                <span>Copier & VoirDrama</span>
               </button>
             </div>
             
