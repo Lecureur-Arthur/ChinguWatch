@@ -39,13 +39,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Je compile mon application en injectant mes variables d'environnement secrètes requises par Vite
+      # Je compile mon application en injectant uniquement mes variables d'environnement secrètes disponibles
       - name: Build application
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_TMDB_API_KEY: ${{ secrets.VITE_TMDB_API_KEY }}
-          VITE_DEEPL_API_KEY: ${{ secrets.VITE_DEEPL_API_KEY }}
         run: npm run build
 
       # Je prépare l'infrastructure GitHub Pages pour recevoir la publication
