@@ -554,7 +554,7 @@ export default function DramaDetail() {
                     key={actor.id}
                     type="button"
                     className="cast-card"
-                    onClick={() => navigate(`/actor/${createSlug(getCastDisplayName(actor))}`)}
+                    onClick={() => navigate(`/actor/${createSlug(getCastDisplayName(actor))}`, { state: { tmdbActorId: actor.id } })}
                     style={{ cursor: 'pointer', border: 'none', background: 'none', padding: 0, textAlign: 'left' }}
                   >
                     {actor.profile_path ? (
