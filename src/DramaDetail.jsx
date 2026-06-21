@@ -1,8 +1,12 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import { translateLongText } from './translationService'
 
-export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
+export default function DramaDetail() {
+  const { slug } = useParams()
+  const navigate = useNavigate()
+
   const [localDrama, setLocalDrama] = useState(null)
   const [tmdbData, setTmdbData] = useState(null)
   const [castNameMap, setCastNameMap] = useState({})
@@ -17,6 +21,17 @@ export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
   const [saveMessage, setSaveMessage] = useState('')
   const [editMode, setEditMode] = useState(false)
   const latinPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ0-9 .,'\-()]+$/
+
+  const createSlug = (title) => {
+    return title
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .trim()
+  }
 
   const getLatinText = (originalText, fallbackText = '') => {
     if (!originalText) return fallbackText || ''
@@ -65,19 +80,32 @@ export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
 
   useEffect(() => {
     fetchDramaDetails()
-  }, [dramaId])
+  }, [slug])
 
   const fetchDramaDetails = async () => {
     setLoading(true)
 
-    const { data: dbData, error: dbError } = await supabase
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setLoading(false)
+      return
+    }
+
+    const { data: allDramas, error: dbError } = await supabase
       .from('dramas')
       .select('*')
-      .eq('id', dramaId)
-      .single()
+      .eq('user_id', user.id)
 
     if (dbError) {
       console.error("Erreur de récupération locale", dbError)
+      setLoading(false)
+      return
+    }
+
+    const dbData = allDramas.find(d => createSlug(d.title) === slug)
+
+    if (!dbData) {
+      setLocalDrama(null)
       setLoading(false)
       return
     }
@@ -105,8 +133,7 @@ export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
         const detailDataEn = await detailResEn.json()
         setTmdbData(detailDataFr)
 
-        // Sauvegarde silencieuse en arrière-plan pour migrer les anciens dramas
-        if (dbData && dbData.cast_list === null) {
+        if (dbData.cast_list === null) {
           const frProviders = detailDataFr?.['watch/providers']?.results?.FR
           const allProviders = [...(frProviders?.flatrate || []), ...(frProviders?.free || [])]
           const uniqueProviders = Array.from(new Map(allProviders.map(item => [item.provider_id, item])).values())
@@ -120,7 +147,7 @@ export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
             episode_run_time: detailDataFr.episode_run_time?.[0] || null,
             cast_list: detailDataFr.credits?.cast?.slice(0, 15) || [],
             watch_providers: uniqueProviders
-          }).eq('id', dramaId)
+          }).eq('id', dbData.id)
         }
 
         const frOverview = detailDataFr.overview
@@ -145,7 +172,6 @@ export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
     } catch (error) {
       console.error("Erreur lors de la récupération des données TMDB", error)
     }
-
     setLoading(false)
   }
 
@@ -211,7 +237,7 @@ export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
     const { error } = await supabase
       .from('dramas')
       .update(updatePayload)
-      .eq('id', dramaId)
+      .eq('id', localDrama.id)
 
     if (error) {
       setSaveMessage('Erreur lors de la sauvegarde : ' + error.message)
@@ -245,29 +271,17 @@ export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
     }
   }
 
-  const createSlug = (title) => {
-    // Convertir en minuscules, remplacer les espaces par des tirets, supprimer les caractères spéciaux
-    return title
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '') // Supprimer les accents
-      .replace(/[^a-z0-9\s-]/g, '') // Garder seulement les lettres, chiffres, espaces et tirets
-      .replace(/\s+/g, '-') // Remplacer les espaces par des tirets
-      .replace(/-+/g, '-') // Réduire les tirets multiples à un seul
-      .trim()
-  }
-
   const getStreamingLinks = () => {
     const title = localDrama?.title || ''
     const encodedTitle = encodeURIComponent(title)
-    const slug = createSlug(title)
+    const slugName = createSlug(title)
     
     return {
       netflix: `https://www.netflix.com/search?q=${encodedTitle}`,
       primeVideo: `https://www.primevideo.com/search?q=${encodedTitle}`,
       disneyPlus: `https://www.disneyplus.com/search?q=${encodedTitle}`,
       appleTV: `https://tv.apple.com/search?term=${encodedTitle}`,
-      voirDrama: `https://voirdrama.to/drama/${slug}/`
+      voirDrama: `https://voirdrama.to/drama/${slugName}/`
     }
   }
 
@@ -277,13 +291,10 @@ export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
 
   const copyTitleAndOpenVoirDrama = () => {
     const title = localDrama?.title || ''
-    // Copier le titre dans le presse-papiers
     navigator.clipboard.writeText(title).then(() => {
-      // Ouvrir la page d'accueil de VoirDrama
       window.open('https://voirdrama.to/', '_blank', 'noopener,noreferrer')
     }).catch(err => {
       console.error('Erreur lors de la copie:', err)
-      // Si la copie échoue, ouvrir juste VoirDrama
       window.open('https://voirdrama.to/', '_blank', 'noopener,noreferrer')
     })
   }
@@ -300,7 +311,7 @@ export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
 
   return (
     <div className="detail-container">
-      <button className="back-btn" onClick={onBack}>
+      <button className="back-btn" onClick={() => navigate(-1)}>
         Retour
       </button>
 
@@ -451,49 +462,31 @@ export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
           <div className="cast-section" style={{ borderTop: 'none', paddingTop: '0', marginTop: '1rem' }}>
             <h3 style={{ color: 'var(--primary-color)', margin: '0 0 1rem 0' }}>Où regarder</h3>
             
-            {/* Affichage des principales plateformes */}
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
               {hasNetflix && (
-                <button
-                  onClick={() => openLink(getStreamingLinks().netflix)}
-                  className="streaming-badge netflix"
-                  style={{ cursor: 'pointer' }}
-                >
+                <button onClick={() => openLink(getStreamingLinks().netflix)} className="streaming-badge netflix">
                   <span style={{ fontSize: '1.4rem' }}>🎬</span>
                   <span>Netflix</span>
                 </button>
               )}
               {hasPrimeVideo && (
-                <button
-                  onClick={() => openLink(getStreamingLinks().primeVideo)}
-                  className="streaming-badge prime-video"
-                  style={{ cursor: 'pointer' }}
-                >
+                <button onClick={() => openLink(getStreamingLinks().primeVideo)} className="streaming-badge prime-video">
                   <span style={{ fontSize: '1.4rem' }}>▶️</span>
                   <span>Prime Video</span>
                 </button>
               )}
               {hasDisneyPlus && (
-                <button
-                  onClick={() => openLink(getStreamingLinks().disneyPlus)}
-                  className="streaming-badge disney-plus"
-                  style={{ cursor: 'pointer' }}
-                >
+                <button onClick={() => openLink(getStreamingLinks().disneyPlus)} className="streaming-badge disney-plus">
                   <span style={{ fontSize: '1.4rem' }}>⭐</span>
                   <span>Disney+</span>
                 </button>
               )}
               {hasAppleTV && (
-                <button
-                  onClick={() => openLink(getStreamingLinks().appleTV)}
-                  className="streaming-badge apple-tv"
-                  style={{ cursor: 'pointer' }}
-                >
+                <button onClick={() => openLink(getStreamingLinks().appleTV)} className="streaming-badge apple-tv">
                   <span style={{ fontSize: '1.4rem' }}>🍎</span>
                   <span>Apple TV</span>
                 </button>
               )}
-              {/* VoirDrama toujours disponible */}
               <button
                 onClick={() => openLink(getStreamingLinks().voirDrama)}
                 style={{
@@ -510,19 +503,10 @@ export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
                   cursor: 'pointer',
                   transition: 'all 0.3s ease'
                 }}
-                onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = 'rgba(96, 224, 255, 0.25)'
-                  e.target.style.boxShadow = '0 8px 24px rgba(96, 224, 255, 0.2)'
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = 'rgba(96, 224, 255, 0.15)'
-                  e.target.style.boxShadow = 'none'
-                }}
               >
                 <span style={{ fontSize: '1.2rem' }}>🔍</span>
                 <span>VoirDrama</span>
               </button>
-              {/* Copier titre et accueil VoirDrama */}
               <button
                 onClick={copyTitleAndOpenVoirDrama}
                 style={{
@@ -539,14 +523,6 @@ export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
                   cursor: 'pointer',
                   transition: 'all 0.3s ease'
                 }}
-                onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = 'rgba(143, 156, 255, 0.25)'
-                  e.target.style.boxShadow = '0 8px 24px rgba(143, 156, 255, 0.2)'
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = 'rgba(143, 156, 255, 0.15)'
-                  e.target.style.boxShadow = 'none'
-                }}
                 title="Copie le titre du drama et ouvre VoirDrama"
               >
                 <span style={{ fontSize: '1.2rem' }}>📋</span>
@@ -554,7 +530,6 @@ export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
               </button>
             </div>
             
-            {/* Affichage de tous les logos si des plateformes principales sont disponibles */}
             {(hasNetflix || hasPrimeVideo || hasDisneyPlus || hasAppleTV) && (
               <div className="providers-container">
                 {providers.map(provider => (
@@ -579,7 +554,7 @@ export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
                     key={actor.id}
                     type="button"
                     className="cast-card"
-                    onClick={() => onSelectActor(actor.id)}
+                    onClick={() => navigate(`/actor/${createSlug(getCastDisplayName(actor))}`, { state: { tmdbActorId: actor.id } })}
                     style={{ cursor: 'pointer', border: 'none', background: 'none', padding: 0, textAlign: 'left' }}
                   >
                     {actor.profile_path ? (

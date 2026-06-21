@@ -1,8 +1,14 @@
 import { useState, useEffect } from 'react'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import { translateLongText } from './translationService'
 
-export default function TmdbPreview({ tmdbId, onBack, session }) {
+export default function TmdbPreview({ session }) {
+  // J'extrais le nom formaté depuis l'URL et j'initialise l'accès à la mémoire de navigation
+  const { slug } = useParams()
+  const navigate = useNavigate()
+  const location = useLocation()
+  
   const [details, setDetails] = useState(null)
   const [loading, setLoading] = useState(true)
   const [translating, setTranslating] = useState(false)
@@ -10,10 +16,17 @@ export default function TmdbPreview({ tmdbId, onBack, session }) {
   const [adding, setAdding] = useState(false)
   const [message, setMessage] = useState('')
   const [tvGenreList, setTvGenreList] = useState([])
+  
+  // Je récupère l'identifiant exact transmis de manière invisible par la page précédente
+  const [internalTmdbId, setInternalTmdbId] = useState(location.state?.tmdbId || null)
 
   useEffect(() => {
-    fetchGenresAndDetails()
-  }, [tmdbId])
+    if (internalTmdbId) {
+      fetchGenresAndDetails(internalTmdbId)
+    } else if (slug) {
+      findTmdbIdFromSlug(slug)
+    }
+  }, [slug, internalTmdbId])
 
   const getLatinText = (originalText, fallbackText) => {
     const latinPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ0-9 .,'\-()]+$/
@@ -33,7 +46,26 @@ export default function TmdbPreview({ tmdbId, onBack, session }) {
     return statusMap[status] || status
   }
 
-  const fetchGenresAndDetails = async () => {
+  // Je prévois une recherche de secours si l'application est chargée directement via cette URL
+  const findTmdbIdFromSlug = async (searchSlug) => {
+    const apiKey = import.meta.env.VITE_TMDB_API_KEY
+    const query = encodeURIComponent(searchSlug.replace(/-/g, ' '))
+    try {
+      const res = await fetch(`https://api.themoviedb.org/3/search/tv?query=${query}&language=fr-FR&api_key=${apiKey}`)
+      const data = await res.json()
+      if (data.results && data.results.length > 0) {
+         setInternalTmdbId(data.results[0].id)
+      } else {
+         setLoading(false)
+         setMessage('Série introuvable.')
+      }
+    } catch (err) {
+      setLoading(false)
+      setMessage('Erreur de recherche.')
+    }
+  }
+
+  const fetchGenresAndDetails = async (idToFetch) => {
     setLoading(true)
     setMessage('')
     try {
@@ -44,8 +76,8 @@ export default function TmdbPreview({ tmdbId, onBack, session }) {
       setTvGenreList(genreData.genres || [])
 
       const [detailsFrRes, detailsEnRes] = await Promise.all([
-        fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?language=fr-FR&append_to_response=credits,watch/providers&api_key=${apiKey}`),
-        fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?language=en-US&append_to_response=credits,watch/providers&api_key=${apiKey}`)
+        fetch(`https://api.themoviedb.org/3/tv/${idToFetch}?language=fr-FR&append_to_response=credits,watch/providers&api_key=${apiKey}`),
+        fetch(`https://api.themoviedb.org/3/tv/${idToFetch}?language=en-US&append_to_response=credits,watch/providers&api_key=${apiKey}`)
       ])
 
       const detailsFr = await detailsFrRes.json()
@@ -134,7 +166,7 @@ export default function TmdbPreview({ tmdbId, onBack, session }) {
           status: 'To Watch',
           poster_url: posterUrl,
           user_id: userId,
-          tmdb_id: tmdbId,
+          tmdb_id: internalTmdbId,
           tmdb_status: details.status || null,
           first_air_date: details.first_air_date || null,
           number_of_seasons: details.number_of_seasons || null,
@@ -162,7 +194,7 @@ export default function TmdbPreview({ tmdbId, onBack, session }) {
   return (
     <div className="detail-container">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <button className="back-btn" onClick={onBack} style={{ margin: 0 }}>
+        <button className="back-btn" onClick={() => navigate(-1)} style={{ margin: 0 }}>
           Retour
         </button>
         <button
