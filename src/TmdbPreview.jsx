@@ -467,8 +467,8 @@ export default function TmdbPreview({ session }) {
 
       {details.credits && details.credits.cast && details.credits.cast.length > 0 && (
         <div className="cast-section">
-          <h3 style={{ color: 'var(--primary-color)', margin: '0 0 1.5rem 0', fontSize: '1.3rem', fontWeight: '700', letterSpacing: '0.05em' }}>Distribution Principale</h3>
-          <div className="cast-scroll">
+          <h3 style={{ color: 'var(--primary-color)', margin: '0 0 1.5rem 0', fontSize: '1.3rem', fontWeight: '700', letterSpacing: '0.05em' }}>Acteurs et Personnages</h3>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
             {details.credits.cast.slice(0, 15).map(actor => (
               <button
                 key={actor.id}
@@ -486,7 +486,7 @@ export default function TmdbPreview({ session }) {
                 )}
                 <div className="cast-info">
                   <div className="cast-name" title={actor.name}>{getCastDisplayName(actor)}</div>
-                  <div className="cast-character" title={actor.character}>{getLatinText(actor.character, actor.character)}</div>
+                  <div className="cast-character" title={actor.character}>Rôle : {getLatinText(actor.character, actor.character)}</div>
                 </div>
               </button>
             ))}
