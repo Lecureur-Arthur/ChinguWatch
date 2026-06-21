@@ -160,16 +160,16 @@ export default function Profile({ session, onSessionRefresh, onAvatarUpdate }) {
               onChange={(e) => setConfirmNewPassword(e.target.value)}
               required
             />
-            <button type="submit" disabled={loadingPassword}>
+            <button type="submit" disabled={loadingPassword} className="btn-profil btn-update-password">
               {loadingPassword ? 'Mise à jour...' : 'Mettre à jour le mot de passe'}
             </button>
           </form>
 
           <div className="profile-actions">
-            <button className="logout-btn" onClick={() => supabase.auth.signOut()}>
+            <button className="logout-btn" onClick={() => supabase.auth.signOut()} className="btn-profil btn-logout">
               Se déconnecter
             </button>
-            <button className="danger-btn" onClick={handleDeleteAccount}>
+            <button className="danger-btn" onClick={handleDeleteAccount} className="btn-profil btn-delete-account">
               Supprimer mon compte
             </button>
           </div>

@@ -263,8 +263,7 @@ textarea {
   resize: vertical;
 }
 
-/* button {
-  background: linear-gradient(135deg, #60e0ff, #8f9cff);
+.btn-profil {
   color: #031023;
   border: none;
   padding: 0.95rem 1.4rem;
@@ -272,7 +271,41 @@ textarea {
   cursor: pointer;
   font-weight: 700;
   letter-spacing: 0.02em;
-} */
+}
+
+/* Bouton "Se déconnecter" : Utilise une couleur neutre mais distinguable */
+.btn-logout {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.btn-logout:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Bouton "Mettre à jour le mot de passe" : Utilise ta couleur secondaire (violet) */
+.btn-update-password {
+  background: var(--accent-color); /* #8f9cff */
+  color: #070b1a;
+}
+
+.btn-update-password:hover {
+  background: #a3adff;
+  box-shadow: 0 0 20px rgba(143, 156, 255, 0.3);
+}
+
+/* Bouton "Supprimer le compte" : Une version adoucie du rouge pour éviter l'agression visuelle */
+.btn-delete-account {
+  background: rgba(255, 85, 102, 0.15);
+  color: #ff5566;
+  border: 1px solid #ff5566;
+}
+
+.btn-delete-account:hover {
+  background: #ff5566;
+  color: #ffffff;
+}
 
 button:hover {
   transform: translateY(-1px);
