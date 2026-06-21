@@ -17,6 +17,7 @@ export default function DramaDetail() {
   const [selectedStatus, setSelectedStatus] = useState('To Watch')
   const [personalRating, setPersonalRating] = useState('')
   const [commentText, setCommentText] = useState('')
+  const [voirDramaRating, setVoirDramaRating] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState('')
   const [editMode, setEditMode] = useState(false)
@@ -114,6 +115,7 @@ export default function DramaDetail() {
     setSelectedStatus(dbData.status || 'To Watch')
     setPersonalRating(dbData.personal_rating ?? '')
     setCommentText(dbData.comment ?? '')
+    setVoirDramaRating(dbData.voirdrama_rating ?? '')
 
     const apiKey = import.meta.env.VITE_TMDB_API_KEY
     let tmdbId = dbData.tmdb_id || null
@@ -172,6 +174,7 @@ export default function DramaDetail() {
     } catch (error) {
       console.error("Erreur lors de la récupération des données TMDB", error)
     }
+
     setLoading(false)
   }
 
@@ -231,7 +234,8 @@ export default function DramaDetail() {
     const updatePayload = {
       status: selectedStatus,
       personal_rating: selectedStatus === 'Watched' ? (personalRating || null) : null,
-      comment: selectedStatus === 'Watched' ? (commentText || null) : null
+      comment: selectedStatus === 'Watched' ? (commentText || null) : null,
+      voirdrama_rating: voirDramaRating ? parseFloat(voirDramaRating) : null
     }
 
     const { error } = await supabase
@@ -362,6 +366,20 @@ export default function DramaDetail() {
                   max="5"
                   value={personalRating}
                   onChange={(e) => setPersonalRating(e.target.value)}
+                  placeholder="Note sur 5"
+                  className="input-field"
+                />
+              </div>
+
+              <div className="panel-card">
+                <span className="panel-label">Note VoirDrama</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="5"
+                  value={voirDramaRating}
+                  onChange={(e) => setVoirDramaRating(e.target.value)}
                   placeholder="Note sur 5"
                   className="input-field"
                 />
@@ -547,8 +565,8 @@ export default function DramaDetail() {
 
           {tmdbData.credits && tmdbData.credits.cast && tmdbData.credits.cast.length > 0 && (
             <div className="cast-section">
-              <h3 style={{ color: 'var(--primary-color)', margin: '0 0 1.5rem 0', fontSize: '1.3rem', fontWeight: '700', letterSpacing: '0.05em' }}>Distribution Principale</h3>
-              <div className="cast-scroll">
+              <h3 style={{ color: 'var(--primary-color)', margin: '0 0 1.5rem 0', fontSize: '1.3rem', fontWeight: '700', letterSpacing: '0.05em' }}>Acteurs et Personnages</h3>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
                 {tmdbData.credits.cast.slice(0, 15).map(actor => (
                   <button
                     key={actor.id}
@@ -566,7 +584,7 @@ export default function DramaDetail() {
                     )}
                     <div className="cast-info">
                       <div className="cast-name" title={actor.name}>{getCastDisplayName(actor)}</div>
-                      <div className="cast-character" title={actor.character}>{getLatinText(actor.character, actor.character)}</div>
+                      <div className="cast-character" title={actor.character}>Rôle : {getLatinText(actor.character, actor.character)}</div>
                     </div>
                   </button>
                 ))}

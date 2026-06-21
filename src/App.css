@@ -927,6 +927,12 @@ button:disabled {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
+.status-select option,
+select option {
+  background-color: #0c1228;
+  color: #f8fbff;
+}
+
 .textarea-field {
   min-height: 110px;
   resize: vertical;
