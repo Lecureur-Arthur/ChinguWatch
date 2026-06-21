@@ -64,14 +64,15 @@ export default function Auth() {
           />
         )}
         
-        <button type="submit" disabled={loading}>
+        <button type="submit" disabled={loading} className="btn-profil">
           {loading ? 'Chargement...' : (isSignUp ? "S'inscrire" : 'Se connecter')}
         </button>
       </form>
       
       <button 
         onClick={() => setIsSignUp(!isSignUp)} 
-        style={{ marginTop: '1rem', background: 'transparent', border: '1px solid var(--primary-color)', color: 'var(--primary-color)' }}
+        style={{ marginTop: '1rem', background: 'transparent', border: '1px solid var(--primary-color)', color: 'var(--primary-color)', width: '100%' }}
+        className="btn-profil"
       >
         {isSignUp ? 'Déjà un compte ? Se connecter' : "Pas de compte ? S'inscrire"}
       </button>
