@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import Stats from './Stats'
 
 export default function Profile({ session, onSessionRefresh, onAvatarUpdate }) {
   const [currentPassword, setCurrentPassword] = useState('')
@@ -174,6 +175,7 @@ export default function Profile({ session, onSessionRefresh, onAvatarUpdate }) {
           </div>
         </div>
       </div>
+      <Stats session={session} />
     </div>
   )
 }
