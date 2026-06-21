@@ -4,7 +4,6 @@ import { supabase } from './supabaseClient'
 import { translateLongText } from './translationService'
 
 export default function TmdbPreview({ session }) {
-  // J'extrais le nom formaté depuis l'URL et j'initialise l'accès à la mémoire de navigation
   const { slug } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
@@ -16,9 +15,67 @@ export default function TmdbPreview({ session }) {
   const [adding, setAdding] = useState(false)
   const [message, setMessage] = useState('')
   const [tvGenreList, setTvGenreList] = useState([])
+  const [castNameMap, setCastNameMap] = useState({})
   
-  // Je récupère l'identifiant exact transmis de manière invisible par la page précédente
   const [internalTmdbId, setInternalTmdbId] = useState(location.state?.tmdbId || null)
+
+  const latinPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ0-9 .,'\-()]+$/
+
+  const createSlug = (title) => {
+    return title
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .trim()
+  }
+
+  const getLatinText = (originalText, fallbackText = '') => {
+    if (!originalText) return fallbackText || ''
+    return latinPattern.test(originalText) ? originalText : fallbackText || originalText
+  }
+
+  const getCastDisplayName = (actor) => {
+    const cachedName = castNameMap[actor.id]
+    if (cachedName) return cachedName
+    if (actor.name && latinPattern.test(actor.name)) return actor.name
+    if (actor.original_name && latinPattern.test(actor.original_name)) return actor.original_name
+    return actor.name || actor.original_name || 'Inconnu'
+  }
+
+  const fetchRomanizedCastNames = async (cast) => {
+    const apiKey = import.meta.env.VITE_TMDB_API_KEY
+    const missingNames = cast.filter(actor => !castNameMap[actor.id] && !latinPattern.test(actor.name))
+    if (missingNames.length === 0) return
+
+    const fetches = missingNames.map(async (actor) => {
+      try {
+        const response = await fetch(`https://api.themoviedb.org/3/person/${actor.id}?language=en-US&api_key=${apiKey}`)
+        const data = await response.json()
+        const name = getLatinText(data.name, actor.name)
+        return [actor.id, name]
+      } catch (error) {
+        return [actor.id, actor.name]
+      }
+    })
+
+    const results = await Promise.all(fetches)
+    setCastNameMap(prev => {
+      const next = { ...prev }
+      results.forEach(([id, name]) => {
+        if (id) next[id] = name
+      })
+      return next
+    })
+  }
+
+  useEffect(() => {
+    if (details?.credits?.cast?.length) {
+      fetchRomanizedCastNames(details.credits.cast.slice(0, 15))
+    }
+  }, [details])
 
   useEffect(() => {
     if (internalTmdbId) {
@@ -28,17 +85,10 @@ export default function TmdbPreview({ session }) {
     }
   }, [slug, internalTmdbId])
 
-  const getLatinText = (originalText, fallbackText) => {
-    const latinPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ0-9 .,'\-()]+$/
-    if (!originalText) return fallbackText
-    if (latinPattern.test(originalText)) return originalText
-    return fallbackText
-  }
-
   const translateTmdbStatus = (status) => {
     const statusMap = {
-      'Ended': 'Fini',
-      'Returning Series': 'En cours de diffusion',
+      'Ended': 'Terminé',
+      'Returning Series': 'En cours de production',
       'Canceled': 'Annulé',
       'In Production': 'En production',
       'Pilot': 'Pilote'
@@ -46,7 +96,6 @@ export default function TmdbPreview({ session }) {
     return statusMap[status] || status
   }
 
-  // Je prévois une recherche de secours si l'application est chargée directement via cette URL
   const findTmdbIdFromSlug = async (searchSlug) => {
     const apiKey = import.meta.env.VITE_TMDB_API_KEY
     const query = encodeURIComponent(searchSlug.replace(/-/g, ' '))
@@ -128,7 +177,7 @@ export default function TmdbPreview({ session }) {
       }
 
       const title = details.displayName || details.name || details.original_name || 'Titre inconnu'
-      const { data: existing, error: existError } = await supabase
+      const { data: existing } = await supabase
         .from('dramas')
         .select('id')
         .eq('user_id', userId)
@@ -180,7 +229,7 @@ export default function TmdbPreview({ session }) {
       if (insertError) {
         setMessage('Erreur lors de l’ajout à la liste.')
       } else {
-        setMessage('Drama ajouté à la liste À voir.')
+        setMessage('Drama ajouté avec succès à la liste À voir.')
       }
     } catch (error) {
       setMessage('Erreur lors de l’ajout à la liste.')
@@ -188,78 +237,262 @@ export default function TmdbPreview({ session }) {
     setAdding(false)
   }
 
-  if (loading) return <div style={{ textAlign: 'center', marginTop: '3rem' }}>Chargement des détails...</div>
-  if (!details) return <div style={{ textAlign: 'center', marginTop: '3rem' }}>Erreur de chargement.</div>
+  const getWatchProviders = () => {
+    if (!details?.['watch/providers']?.results?.FR) return []
+    const frProviders = details['watch/providers'].results.FR
+    const flatrate = frProviders.flatrate || []
+    const free = frProviders.free || []
+    const allProviders = [...flatrate, ...free]
+    return Array.from(new Map(allProviders.map(item => [item.provider_id, item])).values())
+  }
+
+  const getProviderNames = () => {
+    const providers = getWatchProviders()
+    const providerNames = providers.map(p => p.provider_name)
+    return {
+      hasNetflix: providerNames.includes('Netflix'),
+      hasPrimeVideo: providerNames.includes('Amazon Prime Video'),
+      hasDisneyPlus: providerNames.includes('Disney Plus'),
+      hasAppleTV: providerNames.includes('Apple TV'),
+      providers: providers
+    }
+  }
+
+  const getStreamingLinks = () => {
+    const title = details?.displayName || ''
+    const encodedTitle = encodeURIComponent(title)
+    const slugName = createSlug(title)
+    
+    return {
+      netflix: `https://www.netflix.com/search?q=${encodedTitle}`,
+      primeVideo: `https://www.primevideo.com/search?q=${encodedTitle}`,
+      disneyPlus: `https://www.disneyplus.com/search?q=${encodedTitle}`,
+      appleTV: `https://tv.apple.com/search?term=${encodedTitle}`,
+      voirDrama: `https://voirdrama.to/drama/${slugName}/`
+    }
+  }
+
+  const openLink = (url) => {
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  const copyTitleAndOpenVoirDrama = () => {
+    const title = details?.displayName || ''
+    navigator.clipboard.writeText(title).then(() => {
+      window.open('https://voirdrama.to/', '_blank', 'noopener,noreferrer')
+    }).catch(err => {
+      console.error('Erreur lors de la copie:', err)
+      window.open('https://voirdrama.to/', '_blank', 'noopener,noreferrer')
+    })
+  }
+
+  if (loading) return <div style={{ textAlign: 'center', marginTop: '3rem', fontSize: '1.2rem' }}>Chargement des détails...</div>
+  if (!details) return <div style={{ textAlign: 'center', marginTop: '3rem' }}>Erreur de chargement ou série introuvable.</div>
+
+  const { hasNetflix, hasPrimeVideo, hasDisneyPlus, hasAppleTV, providers } = getProviderNames()
 
   return (
     <div className="detail-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <button className="back-btn" onClick={() => navigate(-1)} style={{ margin: 0 }}>
-          Retour
-        </button>
-        <button
-          onClick={addToList}
-          disabled={adding}
-          style={{ border: 'none', backgroundColor: 'var(--primary-color)', color: '#000', borderRadius: '999px', padding: '0.8rem 1.5rem', fontWeight: 'bold' }}
-        >
-          {adding ? 'Ajout...' : 'Ajouter à la liste À voir'}
-        </button>
-      </div>
+      <button className="back-btn" onClick={() => navigate(-1)}>
+        Retour
+      </button>
 
-      {message && <div style={{ marginBottom: '1.5rem', color: 'var(--secondary-text)', textAlign: 'right' }}>{message}</div>}
+      {message && <div style={{ marginBottom: '1.5rem', color: 'var(--secondary-text)', textAlign: 'right', fontWeight: 'bold' }}>{message}</div>}
 
       <div className="detail-header">
         <div className="detail-poster-container">
           {details.poster_path ? (
             <img src={`https://image.tmdb.org/t/p/w500${details.poster_path}`} alt={details.displayName} />
           ) : (
-            <div style={{ width: '100%', aspectRatio: '2 / 3', backgroundColor: '#222', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Pas d'image</div>
+            <div style={{ width: '100%', aspectRatio: '2 / 3', backgroundColor: '#333', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ color: '#888' }}>Pas d'image</span>
+            </div>
           )}
         </div>
+        
         <div className="detail-info-container">
           <h2 className="detail-title">{details.displayName}</h2>
-          {details.displayOriginalName && details.displayOriginalName !== details.displayName && (
-            <p style={{ margin: '0 0 1.5rem 0', color: '#aaa' }}>Original : {details.displayOriginalName}</p>
-          )}
+          <div style={{ color: '#aaa', marginBottom: '1.5rem', fontSize: '1.1rem' }}>
+            {details.genres?.map((genre) => genre.name).join(', ') || 'Aucun genre spécifié'}
+          </div>
+
+          <div className="detail-top-row" style={{ justifyContent: 'flex-end' }}>
+            <button
+              onClick={addToList}
+              disabled={adding}
+              className="secondary-btn"
+              style={{ backgroundColor: 'var(--primary-color)', color: '#000', border: 'none', fontWeight: 'bold' }}
+            >
+              {adding ? 'Ajout en cours...' : 'Ajouter à la liste'}
+            </button>
+          </div>
 
           <div className="detail-stats-row">
             <div className="panel-card stat-card">
               <span className="panel-label">Note TMDB</span>
-              <span className="panel-value">{details.vote_average ? `${details.vote_average.toFixed(1)}/10` : '-'}</span>
-            </div>
-            <div className="panel-card stat-card">
-              <span className="panel-label">Statut</span>
-              <span className="panel-value">{translateTmdbStatus(details.status) || 'Inconnu'}</span>
+              <span className="panel-value">{details.vote_average ? `${details.vote_average.toFixed(1)} / 10` : '-'}</span>
             </div>
           </div>
 
-          {translating ? (
-            <div style={{ padding: '1rem', borderRadius: '12px', backgroundColor: '#111', border: '1px solid #333' }}>
-              <div style={{ color: '#ccc', marginBottom: '0.75rem' }}>Traduction du synopsis en cours...</div>
-              <div style={{ width: '100%', backgroundColor: '#222', borderRadius: '999px', overflow: 'hidden' }}>
-                <div style={{ width: `${translationProgress}%`, height: '10px', backgroundColor: 'var(--primary-color)', transition: 'width 0.2s ease' }} />
+          <div className="panel-card synopsis-card">
+            <span className="panel-label">Synopsis</span>
+            {translating ? (
+              <div className="translation-status">
+                <p className="translating-text">Traduction du synopsis en cours...</p>
+                <div className="progress-container">
+                  <div className="progress-bar" style={{ width: `${translationProgress}%` }} />
+                </div>
               </div>
-            </div>
-          ) : (
-            <p style={{ lineHeight: '1.7', color: '#ddd' }}>{details.displayOverview || 'Aucun synopsis disponible.'}</p>
-          )}
+            ) : (
+              <p className="synopsis-text">{details.displayOverview || 'Aucun synopsis disponible.'}</p>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="detail-meta-grid">
         <div className="meta-item">
-          <span className="meta-label">Saisons</span>
-          <span className="meta-value">{details.number_of_seasons ?? '–'}</span>
+          <span className="meta-label">Statut</span>
+          <span className="meta-value">{translateTmdbStatus(details.status)}</span>
         </div>
         <div className="meta-item">
           <span className="meta-label">Épisodes</span>
-          <span className="meta-value">{details.number_of_episodes ?? '–'}</span>
+          <span className="meta-value">{details.number_of_episodes || '?'}</span>
+        </div>
+        <div className="meta-item">
+          <span className="meta-label">Saisons</span>
+          <span className="meta-value">{details.number_of_seasons || '?'}</span>
+        </div>
+        <div className="meta-item">
+          <span className="meta-label">Durée moyenne</span>
+          <span className="meta-value">
+            {details.episode_run_time && details.episode_run_time.length > 0 
+              ? `${details.episode_run_time[0]} min` 
+              : 'Inconnue'}
+          </span>
         </div>
         <div className="meta-item">
           <span className="meta-label">Première diffusion</span>
-          <span className="meta-value">{details.first_air_date ? new Date(details.first_air_date).toLocaleDateString('fr-FR') : 'Inconnue'}</span>
+          <span className="meta-value">
+            {details.first_air_date ? new Date(details.first_air_date).toLocaleDateString('fr-FR') : 'Inconnue'}
+          </span>
         </div>
       </div>
+
+      <div className="cast-section" style={{ borderTop: 'none', paddingTop: '0', marginTop: '1rem' }}>
+        <h3 style={{ color: 'var(--primary-color)', margin: '0 0 1rem 0' }}>Où regarder</h3>
+        
+        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+          {hasNetflix && (
+            <button onClick={() => openLink(getStreamingLinks().netflix)} className="streaming-badge netflix">
+              <span style={{ fontSize: '1.4rem' }}>🎬</span>
+              <span>Netflix</span>
+            </button>
+          )}
+          {hasPrimeVideo && (
+            <button onClick={() => openLink(getStreamingLinks().primeVideo)} className="streaming-badge prime-video">
+              <span style={{ fontSize: '1.4rem' }}>▶️</span>
+              <span>Prime Video</span>
+            </button>
+          )}
+          {hasDisneyPlus && (
+            <button onClick={() => openLink(getStreamingLinks().disneyPlus)} className="streaming-badge disney-plus">
+              <span style={{ fontSize: '1.4rem' }}>⭐</span>
+              <span>Disney+</span>
+            </button>
+          )}
+          {hasAppleTV && (
+            <button onClick={() => openLink(getStreamingLinks().appleTV)} className="streaming-badge apple-tv">
+              <span style={{ fontSize: '1.4rem' }}>🍎</span>
+              <span>Apple TV</span>
+            </button>
+          )}
+          <button
+            onClick={() => openLink(getStreamingLinks().voirDrama)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              padding: '0.75rem 1.25rem',
+              backgroundColor: 'rgba(96, 224, 255, 0.15)',
+              border: '1px solid rgba(96, 224, 255, 0.4)',
+              borderRadius: '12px',
+              color: '#60e0ff',
+              fontWeight: '600',
+              fontSize: '0.95rem',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease'
+            }}
+          >
+            <span style={{ fontSize: '1.2rem' }}>🔍</span>
+            <span>VoirDrama</span>
+          </button>
+          <button
+            onClick={copyTitleAndOpenVoirDrama}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              padding: '0.75rem 1.25rem',
+              backgroundColor: 'rgba(143, 156, 255, 0.15)',
+              border: '1px solid rgba(143, 156, 255, 0.4)',
+              borderRadius: '12px',
+              color: '#8f9cff',
+              fontWeight: '600',
+              fontSize: '0.95rem',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease'
+            }}
+            title="Copie le titre du drama et ouvre VoirDrama"
+          >
+            <span style={{ fontSize: '1.2rem' }}>📋</span>
+            <span>Copier & VoirDrama</span>
+          </button>
+        </div>
+        
+        {(hasNetflix || hasPrimeVideo || hasDisneyPlus || hasAppleTV) && (
+          <div className="providers-container">
+            {providers.map(provider => (
+              <img 
+                key={provider.provider_id} 
+                src={`https://image.tmdb.org/t/p/w45${provider.logo_path}`} 
+                alt={provider.provider_name}
+                title={provider.provider_name}
+                className="provider-logo"
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {details.credits && details.credits.cast && details.credits.cast.length > 0 && (
+        <div className="cast-section">
+          <h3 style={{ color: 'var(--primary-color)', margin: '0 0 1.5rem 0', fontSize: '1.3rem', fontWeight: '700', letterSpacing: '0.05em' }}>Distribution Principale</h3>
+          <div className="cast-scroll">
+            {details.credits.cast.slice(0, 15).map(actor => (
+              <button
+                key={actor.id}
+                type="button"
+                className="cast-card"
+                onClick={() => navigate(`/actor/${createSlug(getCastDisplayName(actor))}`, { state: { tmdbActorId: actor.id } })}
+                style={{ cursor: 'pointer', border: 'none', background: 'none', padding: 0, textAlign: 'left' }}
+              >
+                {actor.profile_path ? (
+                  <img src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`} alt={actor.name} className="cast-photo" />
+                ) : (
+                  <div className="cast-photo" style={{ backgroundColor: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: '2rem', color: '#555' }}>?</span>
+                  </div>
+                )}
+                <div className="cast-info">
+                  <div className="cast-name" title={actor.name}>{getCastDisplayName(actor)}</div>
+                  <div className="cast-character" title={actor.character}>{getLatinText(actor.character, actor.character)}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
