@@ -17,6 +17,7 @@ export default function DramaDetail() {
   const [selectedStatus, setSelectedStatus] = useState('To Watch')
   const [personalRating, setPersonalRating] = useState('')
   const [commentText, setCommentText] = useState('')
+  const [voirDramaRating, setVoirDramaRating] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState('')
   const [editMode, setEditMode] = useState(false)
@@ -114,6 +115,7 @@ export default function DramaDetail() {
     setSelectedStatus(dbData.status || 'To Watch')
     setPersonalRating(dbData.personal_rating ?? '')
     setCommentText(dbData.comment ?? '')
+    setVoirDramaRating(dbData.voirdrama_rating ?? '')
 
     const apiKey = import.meta.env.VITE_TMDB_API_KEY
     let tmdbId = dbData.tmdb_id || null
@@ -172,6 +174,7 @@ export default function DramaDetail() {
     } catch (error) {
       console.error("Erreur lors de la récupération des données TMDB", error)
     }
+
     setLoading(false)
   }
 
@@ -231,7 +234,8 @@ export default function DramaDetail() {
     const updatePayload = {
       status: selectedStatus,
       personal_rating: selectedStatus === 'Watched' ? (personalRating || null) : null,
-      comment: selectedStatus === 'Watched' ? (commentText || null) : null
+      comment: selectedStatus === 'Watched' ? (commentText || null) : null,
+      voirdrama_rating: voirDramaRating ? parseFloat(voirDramaRating) : null
     }
 
     const { error } = await supabase
@@ -362,6 +366,20 @@ export default function DramaDetail() {
                   max="5"
                   value={personalRating}
                   onChange={(e) => setPersonalRating(e.target.value)}
+                  placeholder="Note sur 5"
+                  className="input-field"
+                />
+              </div>
+
+              <div className="panel-card">
+                <span className="panel-label">Note VoirDrama</span>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="5"
+                  value={voirDramaRating}
+                  onChange={(e) => setVoirDramaRating(e.target.value)}
                   placeholder="Note sur 5"
                   className="input-field"
                 />
