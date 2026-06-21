@@ -438,9 +438,11 @@ export default function DramaDetail() {
           </div>
 
           {localDrama.comment && (
-            <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#1a1a1a', borderRadius: '8px', borderLeft: '4px solid var(--primary-color)' }}>
-              <div style={{ fontSize: '0.85rem', color: '#aaa', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Mon Avis</div>
-              <div style={{ fontStyle: 'italic', color: '#fff' }}>"{localDrama.comment}"</div>
+            <div className="panel-card" style={{ marginTop: '1.5rem', borderLeft: '4px solid var(--primary-color)' }}>
+              <div className="panel-label" style={{ marginBottom: '0.5rem' }}>Mon Avis</div>
+              <div style={{ fontStyle: 'italic', color: '#fff', fontSize: '1rem', lineHeight: '1.6' }}>
+                "{localDrama.comment}"
+              </div>
             </div>
           )}
         </div>
