@@ -11,11 +11,15 @@ export default function DramaList({ session, status }) {
   const [reviewComment, setReviewComment] = useState('')
 
   const [searchQuery, setSearchQuery] = useState('')
-  const [sortBy, setSortBy] = useState('date_desc')
+  
+  // J'initialise le tri par défaut en fonction du statut de la page active
+  const [sortBy, setSortBy] = useState(status === 'Watched' ? 'personal_rating_desc' : 'rating_desc')
 
   const navigate = useNavigate()
 
   useEffect(() => {
+    // Je force la réinitialisation du tri par défaut lors de la navigation entre les onglets
+    setSortBy(status === 'Watched' ? 'personal_rating_desc' : 'rating_desc')
     fetchDramas()
   }, [status])
 
@@ -165,10 +169,10 @@ export default function DramaList({ session, status }) {
           className="status-select"
           style={{ width: 'auto', minWidth: '220px', margin: 0 }}
         >
+          <option value="rating_desc">Note TMDB (Décroissante)</option>
           <option value="date_desc">Plus récents d'abord</option>
           <option value="date_asc">Plus anciens d'abord</option>
           <option value="alpha_asc">Ordre alphabétique (A-Z)</option>
-          <option value="rating_desc">Note TMDB (Décroissante)</option>
           {status === 'Watched' && <option value="personal_rating_desc">Ma note (Décroissante)</option>}
         </select>
       </div>
