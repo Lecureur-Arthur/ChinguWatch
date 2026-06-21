@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient'
 export default function Stats({ session }) {
   const [stats, setStats] = useState({
     categories: {
+      'Not Found': { count: 0, minutes: 0 },
       'To Watch': { count: 0, minutes: 0 },
       'Watching': { count: 0, minutes: 0 },
       'Watched': { count: 0, minutes: 0 }
@@ -22,6 +23,7 @@ export default function Stats({ session }) {
 
     if (data) {
       let newStats = {
+        'Not Found': { count: 0, minutes: 0 },
         'To Watch': { count: 0, minutes: 0 },
         'Watching': { count: 0, minutes: 0 },
         'Watched': { count: 0, minutes: 0 }
@@ -75,6 +77,13 @@ export default function Stats({ session }) {
             <div style={{ fontSize: '0.9rem', color: 'var(--secondary-text)' }}>Temps total : {formatDuration(stats.categories['Watched'].minutes)}</div>
         </div>
         
+        {/* Catégorie À Voir */}
+        <div className="panel-card" style={{ padding: '1rem', borderLeft: '4px solid #af4c4c' }}>
+            <span className="panel-label">Streaming non trouvé</span>
+            <div className="panel-value" style={{ fontSize: '1.2rem', margin: '0.5rem 0' }}>{stats.categories['Not Found'].count} séries</div>
+            <div style={{ fontSize: '0.9rem', color: 'var(--secondary-text)' }}>Temps estimé : {formatDuration(stats.categories['Not Found'].minutes)}</div>
+        </div>
+
       </div>
     </div>
   )

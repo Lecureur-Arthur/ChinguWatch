@@ -3,6 +3,24 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 
 export default function DramaList({ session, status }) {
+  useEffect(() => {
+    // 1. Déclare une fonction asynchrone interne
+    const fetchDramas = async () => {
+      const { data, error } = await supabase
+        .from('dramas')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('status', status)
+      
+      if (data) {
+        setDramas(data)
+      }
+    }
+
+    // 2. Appelle la fonction
+    fetchDramas()
+  }, [session, status]) // La fonction se relance si le statut change
+
   const [dramas, setDramas] = useState([])
   const [loading, setLoading] = useState(true)
   
@@ -248,6 +266,7 @@ export default function DramaList({ session, status }) {
                       className="status-select"
                       style={{ marginTop: '1rem' }}
                     >
+                      <option value="Not Found">Streaming Introuvable</option>
                       <option value="To Watch">À voir</option>
                       <option value="Watching">En cours</option>
                       <option value="Watched">Vu</option>

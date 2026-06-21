@@ -75,6 +75,7 @@ export default function App() {
         <h1>ChinguWatch</h1>
         
         <div className="nav-buttons">
+          <button className={`nav-btn ${isActive('/NotFound') ? 'active' : ''}`} onClick={() => navigate('/NotFound')}>Vidéos Introuvables</button>
           <button className={`nav-btn ${isActive('/ToWatch') ? 'active' : ''}`} onClick={() => navigate('/ToWatch')}>À voir</button>
           <button className={`nav-btn ${isActive('/Watching') ? 'active' : ''}`} onClick={() => navigate('/Watching')}>En cours</button>
           <button className={`nav-btn ${isActive('/Watched') ? 'active' : ''}`} onClick={() => navigate('/Watched')}>Vu</button>
@@ -103,6 +104,7 @@ export default function App() {
           <Route path="/drama/:slug" element={<DramaDetail />} />
           <Route path="/actor/:slug" element={<DramaActeur />} />
           <Route path="/preview/:slug" element={<TmdbPreview session={session} />} />
+          <Route path="/NotFound" element={<DramaList session={session} status="Not Found" />} />
         </Routes>
       </main>
     </div>
