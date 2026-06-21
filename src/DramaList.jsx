@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 
-export default function DramaList({ session, status, onSelectDrama }) {
+export default function DramaList({ session, status }) {
   const [dramas, setDramas] = useState([])
   const [loading, setLoading] = useState(true)
   
   const [reviewingId, setReviewingId] = useState(null)
   const [reviewRating, setReviewRating] = useState('')
   const [reviewComment, setReviewComment] = useState('')
+
+  const navigate = useNavigate()
 
   useEffect(() => {
     fetchDramas()

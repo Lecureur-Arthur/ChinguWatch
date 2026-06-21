@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import './App.css'
 import Auth from './Auth'
@@ -14,12 +15,9 @@ export default function App() {
   const [avatarUrl, setAvatarUrl] = useState(null)
   const [avatarError, setAvatarError] = useState(false)
   
-  // États de navigation et historique
-  const [activeTab, setActiveTab] = useState('to_watch')
-  const [selectedDramaId, setSelectedDramaId] = useState(null)
-  const [selectedActorId, setSelectedActorId] = useState(null)
-  const [previewTmdbId, setPreviewTmdbId] = useState(null)
-  const [navHistory, setNavHistory] = useState([]) 
+  // J'utilise les hooks de react-router-dom pour gérer la navigation et l'url courante.
+  const navigate = useNavigate()
+  const location = useLocation()
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -38,46 +36,7 @@ export default function App() {
     return <Auth />
   }
 
-  // Fonction de navigation profonde avec sauvegarde de l'historique
-  const navigateTo = (tab, params = {}) => {
-    setNavHistory(prev => [...prev, { 
-      tab: activeTab, 
-      dramaId: selectedDramaId, 
-      actorId: selectedActorId, 
-      tmdbId: previewTmdbId 
-    }])
-    setActiveTab(tab)
-    if (params.dramaId !== undefined) setSelectedDramaId(params.dramaId)
-    if (params.actorId !== undefined) setSelectedActorId(params.actorId)
-    if (params.tmdbId !== undefined) setPreviewTmdbId(params.tmdbId)
-  }
-
-  // Fonction de retour en arrière
-  const goBack = () => {
-    setNavHistory(prev => {
-      const newHistory = [...prev]
-      const lastState = newHistory.pop()
-      if (lastState) {
-        setActiveTab(lastState.tab)
-        setSelectedDramaId(lastState.dramaId)
-        setSelectedActorId(lastState.actorId)
-        setPreviewTmdbId(lastState.tmdbId)
-      } else {
-        setActiveTab('to_watch')
-      }
-      return newHistory
-    })
-  }
-
-  // Réinitialisation lors du clic sur le menu principal
-  const handleNavClick = (tab) => {
-    setNavHistory([])
-    setActiveTab(tab)
-    setSelectedDramaId(null)
-    setSelectedActorId(null)
-    setPreviewTmdbId(null)
-  }
-
+  // Je conserve ma méthode de rafraîchissement de session.
   const refreshSession = async () => {
     const { data: { session: newSession } } = await supabase.auth.getSession()
     setSession(newSession)
@@ -109,18 +68,21 @@ export default function App() {
     setAvatarError(false)
   }
 
+  // Je vérifie si la route courante correspond au bouton pour lui appliquer la classe active.
+  const isActive = (path) => location.pathname.startsWith(path)
+
   return (
     <div className="app-container">
       <nav className="navbar">
         <h1>ChinguWatch</h1>
         
         <div className="nav-buttons">
-          <button className={`nav-btn ${activeTab === 'to_watch' ? 'active' : ''}`} onClick={() => handleNavClick('to_watch')}>À voir</button>
-          <button className={`nav-btn ${activeTab === 'watching' ? 'active' : ''}`} onClick={() => handleNavClick('watching')}>En cours</button>
-          <button className={`nav-btn ${activeTab === 'watched' ? 'active' : ''}`} onClick={() => handleNavClick('watched')}>Vu</button>
-          <button className={`nav-btn ${activeTab === 'add' ? 'active' : ''}`} onClick={() => handleNavClick('add')}>Ajouter</button>
+          <button className={`nav-btn ${isActive('/ToWatch') ? 'active' : ''}`} onClick={() => navigate('/ToWatch')}>À voir</button>
+          <button className={`nav-btn ${isActive('/Watching') ? 'active' : ''}`} onClick={() => navigate('/Watching')}>En cours</button>
+          <button className={`nav-btn ${isActive('/Watched') ? 'active' : ''}`} onClick={() => navigate('/Watched')}>Vu</button>
+          <button className={`nav-btn ${isActive('/Add') ? 'active' : ''}`} onClick={() => navigate('/Add')}>Ajouter</button>
           
-          <button type="button" className="avatar-nav-btn" onClick={() => handleNavClick('profile')} aria-label="Ouvrir le profil">
+          <button type="button" className="avatar-nav-btn" onClick={() => navigate('/Profil')} aria-label="Ouvrir le profil">
             {activeAvatarUrl && !avatarError ? (
               <img src={activeAvatarUrl} alt="Profil" className="nav-avatar" onError={(e) => tryLoadSignedAvatar(e.currentTarget.src)} />
             ) : (
@@ -133,14 +95,18 @@ export default function App() {
       </nav>
 
       <main style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
-        {activeTab === 'to_watch' && <DramaList session={session} status="To Watch" onSelectDrama={(id) => navigateTo('detail', { dramaId: id })} />}
-        {activeTab === 'watching' && <DramaList session={session} status="Watching" onSelectDrama={(id) => navigateTo('detail', { dramaId: id })} />}
-        {activeTab === 'watched' && <DramaList session={session} status="Watched" onSelectDrama={(id) => navigateTo('detail', { dramaId: id })} />}
-        {activeTab === 'add' && <AddDrama session={session} />}
-        {activeTab === 'profile' && <Profile session={session} onSessionRefresh={refreshSession} onAvatarUpdate={handleAvatarUpdate} />}
-        {activeTab === 'detail' && selectedDramaId && <DramaDetail dramaId={selectedDramaId} onBack={goBack} onSelectActor={(id) => navigateTo('actor', { actorId: id })} />}
-        {activeTab === 'actor' && selectedActorId && <DramaActeur actorId={selectedActorId} onBack={goBack} onPreviewTmdb={(id) => navigateTo('tmdb_preview', { tmdbId: id })} />}
-        {activeTab === 'tmdb_preview' && previewTmdbId && <TmdbPreview tmdbId={previewTmdbId} onBack={goBack} session={session} />}
+        {/* J'organise ici l'ensemble de mes routes pour faire correspondre l'URL au bon composant. */}
+        <Routes>
+          <Route path="/" element={<Navigate to="/ToWatch" replace />} />
+          <Route path="/ToWatch" element={<DramaList session={session} status="To Watch" />} />
+          <Route path="/Watching" element={<DramaList session={session} status="Watching" />} />
+          <Route path="/Watched" element={<DramaList session={session} status="Watched" />} />
+          <Route path="/Add" element={<AddDrama session={session} />} />
+          <Route path="/Profil" element={<Profile session={session} onSessionRefresh={refreshSession} onAvatarUpdate={handleAvatarUpdate} />} />
+          <Route path="/drama/:id" element={<DramaDetail />} />
+          <Route path="/actor/:id" element={<DramaActeur />} />
+          <Route path="/preview/:id" element={<TmdbPreview session={session} />} />
+        </Routes>
       </main>
     </div>
   )

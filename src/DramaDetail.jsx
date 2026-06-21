@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import { translateLongText } from './translationService'
 
-export default function DramaDetail({ dramaId, onBack, onSelectActor }) {
+export default function DramaDetail({}) {
+  const {id: dramaId} = useParams()
+  const navigate = useNavigate()
   const [localDrama, setLocalDrama] = useState(null)
   const [tmdbData, setTmdbData] = useState(null)
   const [castNameMap, setCastNameMap] = useState({})
