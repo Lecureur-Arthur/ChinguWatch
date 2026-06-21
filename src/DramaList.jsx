@@ -205,13 +205,13 @@ export default function DramaList({ session, status }) {
                 </div>
 
                 {status === 'Watched' && drama.personal_rating && (
-                  <div style={{ marginTop: '1rem', padding: '0.8rem', backgroundColor: '#1a1a1a', borderRadius: '8px', borderLeft: '3px solid var(--primary-color)' }}>
+                  <div className="panel-card" style={{ marginTop: '1rem', borderLeft: '4px solid var(--primary-color)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <span style={{ fontSize: '0.85rem', color: 'var(--secondary-text)', textTransform: 'uppercase', letterSpacing: '1px' }}>Ma Note</span>
+                      <span className="panel-label">Ma Note</span>
                       <strong style={{ color: 'var(--primary-color)', fontSize: '1.1rem' }}>{drama.personal_rating} / 5</strong>
                     </div>
                     {drama.comment && (
-                      <div style={{ fontSize: '0.9rem', color: 'var(--secondary-text)', fontStyle: 'italic', lineHeight: '1.4' }}>
+                      <div style={{ fontSize: '0.9rem', color: '#ccc', fontStyle: 'italic', lineHeight: '1.4', marginTop: '0.5rem' }}>
                         "{drama.comment}"
                       </div>
                     )}
