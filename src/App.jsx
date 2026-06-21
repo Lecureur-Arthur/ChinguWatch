@@ -15,7 +15,7 @@ export default function App() {
   const [avatarUrl, setAvatarUrl] = useState(null)
   const [avatarError, setAvatarError] = useState(false)
   
-  // J'utilise les hooks de react-router-dom pour gérer la navigation et l'url courante.
+  // J'instancie les outils de navigation de react-router-dom
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -36,7 +36,6 @@ export default function App() {
     return <Auth />
   }
 
-  // Je conserve ma méthode de rafraîchissement de session.
   const refreshSession = async () => {
     const { data: { session: newSession } } = await supabase.auth.getSession()
     setSession(newSession)
@@ -68,7 +67,6 @@ export default function App() {
     setAvatarError(false)
   }
 
-  // Je vérifie si la route courante correspond au bouton pour lui appliquer la classe active.
   const isActive = (path) => location.pathname.startsWith(path)
 
   return (
@@ -95,7 +93,6 @@ export default function App() {
       </nav>
 
       <main style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
-        {/* J'organise ici l'ensemble de mes routes pour faire correspondre l'URL au bon composant. */}
         <Routes>
           <Route path="/" element={<Navigate to="/ToWatch" replace />} />
           <Route path="/ToWatch" element={<DramaList session={session} status="To Watch" />} />
@@ -103,9 +100,9 @@ export default function App() {
           <Route path="/Watched" element={<DramaList session={session} status="Watched" />} />
           <Route path="/Add" element={<AddDrama session={session} />} />
           <Route path="/Profil" element={<Profile session={session} onSessionRefresh={refreshSession} onAvatarUpdate={handleAvatarUpdate} />} />
-          <Route path="/drama/:id" element={<DramaDetail />} />
-          <Route path="/actor/:id" element={<DramaActeur />} />
-          <Route path="/preview/:id" element={<TmdbPreview session={session} />} />
+          <Route path="/drama/:slug" element={<DramaDetail />} />
+          <Route path="/actor/:slug" element={<DramaActeur />} />
+          <Route path="/preview/:slug" element={<TmdbPreview session={session} />} />
         </Routes>
       </main>
     </div>

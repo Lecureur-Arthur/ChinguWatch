@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 
 export default function DramaList({ session, status }) {
@@ -35,8 +35,18 @@ export default function DramaList({ session, status }) {
     setLoading(false)
   }
 
+  const createSlug = (title) => {
+    return title
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .trim()
+  }
+
   const handleStatusChange = async (drama, newStatus, e) => {
-    // J'empêche la propagation du clic vers la carte pour ne pas déclencher l'ouverture de la page détaillée
     e.stopPropagation()
     
     if (newStatus === 'Watched') {
@@ -118,7 +128,7 @@ export default function DramaList({ session, status }) {
           <div 
             key={drama.id} 
             className="drama-card" 
-            onClick={() => onSelectDrama(drama.id)}
+            onClick={() => navigate(`/drama/${createSlug(drama.title)}`)}
             style={{ cursor: 'pointer' }}
           >
             {drama.poster_url ? (
@@ -151,7 +161,6 @@ export default function DramaList({ session, status }) {
                 </div>
               )}
 
-              {/* J'applique la méthode stopPropagation sur tous les boutons pour isoler le clic de la carte entière */}
               <div onClick={(e) => e.stopPropagation()}>
                 {reviewingId === drama.id ? (
                   <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', backgroundColor: '#1a1a1a', padding: '0.8rem', borderRadius: '8px' }}>

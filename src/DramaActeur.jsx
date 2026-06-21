@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 
-export default function DramaActeur({ actorId, onBack, onPreviewTmdb }) {
+// Je retire les anciennes propriétés manuelles
+export default function DramaActeur() {
+  const { slug } = useParams()
+  const navigate = useNavigate()
+
   const [actorDetails, setActorDetails] = useState(null)
   const [actorCredits, setActorCredits] = useState(null)
   const [actorCreditsLoading, setActorCreditsLoading] = useState(true)
@@ -16,11 +21,17 @@ export default function DramaActeur({ actorId, onBack, onPreviewTmdb }) {
     'Tokasatsu', 'Vie Quotidienne', 'Wuxia', 'Yuri'
   ])
 
-  useEffect(() => {
-    if (actorId) {
-      fetchActorDetails(actorId)
-    }
-  }, [actorId])
+  // Je définis la méthode de création de slug pour formater l'URL
+  const createSlug = (title) => {
+    return title
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .trim()
+  }
 
   const normalizeGenres = (genresList) => {
     const genreMapping = {
@@ -71,6 +82,12 @@ export default function DramaActeur({ actorId, onBack, onPreviewTmdb }) {
     fetchGenres()
   }, [])
 
+  useEffect(() => {
+    if (slug) {
+      findActorAndFetchDetails(slug)
+    }
+  }, [slug])
+
   const getLatinDisplayName = (personDetails, fallbackName) => {
     const latinNamePattern = /^[A-Za-zÀ-ÖØ-öø-ÿ0-9 .,'\-()]+$/
     if (personDetails?.also_known_as?.length) {
@@ -90,15 +107,28 @@ export default function DramaActeur({ actorId, onBack, onPreviewTmdb }) {
     return fallbackText
   }
 
-  const fetchActorDetails = async (actorId) => {
+  const findActorAndFetchDetails = async (actorSlug) => {
     setActorCreditsLoading(true)
 
     try {
       const apiKey = import.meta.env.VITE_TMDB_API_KEY
+      const query = encodeURIComponent(actorSlug.replace(/-/g, ' '))
+      
+      const searchRes = await fetch(`https://api.themoviedb.org/3/search/person?query=${query}&language=fr-FR&api_key=${apiKey}`)
+      const searchData = await searchRes.json()
+
+      if (!searchData.results || searchData.results.length === 0) {
+        setActorDetails(null)
+        setActorCreditsLoading(false)
+        return
+      }
+
+      const tmdbActorId = searchData.results[0].id
+
       const [detailsRes, creditsResFr, creditsResEn] = await Promise.all([
-        fetch(`https://api.themoviedb.org/3/person/${actorId}?language=fr-FR&api_key=${apiKey}`),
-        fetch(`https://api.themoviedb.org/3/person/${actorId}/tv_credits?language=fr-FR&api_key=${apiKey}`),
-        fetch(`https://api.themoviedb.org/3/person/${actorId}/tv_credits?language=en-US&api_key=${apiKey}`)
+        fetch(`https://api.themoviedb.org/3/person/${tmdbActorId}?language=fr-FR&api_key=${apiKey}`),
+        fetch(`https://api.themoviedb.org/3/person/${tmdbActorId}/tv_credits?language=fr-FR&api_key=${apiKey}`),
+        fetch(`https://api.themoviedb.org/3/person/${tmdbActorId}/tv_credits?language=en-US&api_key=${apiKey}`)
       ])
 
       const detailsData = await detailsRes.json()
@@ -152,7 +182,7 @@ export default function DramaActeur({ actorId, onBack, onPreviewTmdb }) {
 
   return (
     <div className="detail-container">
-      <button className="back-btn" onClick={onBack}>
+      <button className="back-btn" onClick={() => navigate(-1)}>
         Retour
       </button>
 
@@ -195,7 +225,6 @@ export default function DramaActeur({ actorId, onBack, onPreviewTmdb }) {
         {!actorCreditsLoading && actorCredits && actorCredits.length > 0 && actorCredits
           .filter((credit) => {
             if (actorGenreFilter.length > 0) {
-              // Mapper les noms de genres textuels aux genre_ids de l'API TMDB
               const selectedGenreIds = actorGenreFilter.flatMap((genreName) => {
                 const tmdbGenres = tvGenreList.filter((g) => g.name === genreName)
                 return tmdbGenres.map((g) => g.id)
@@ -212,7 +241,8 @@ export default function DramaActeur({ actorId, onBack, onPreviewTmdb }) {
               key={credit.credit_id || credit.id}
               type="button"
               className="drama-card"
-              onClick={() => onPreviewTmdb(credit.id)}
+              // Je navigue vers le nom de la série tout en transmettant l'identifiant technique en arrière-plan
+              onClick={() => navigate(`/preview/${createSlug(credit.name)}`, { state: { tmdbId: credit.id } })}
               style={{ cursor: 'pointer', border: 'none', padding: 0 }}
             >
               {credit.poster_path ? (
