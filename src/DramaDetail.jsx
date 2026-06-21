@@ -484,67 +484,34 @@ export default function DramaDetail() {
             
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
               {hasNetflix && (
-                <button onClick={() => openLink(getStreamingLinks().netflix)} className="streaming-badge netflix">
+                <button onClick={() => openLink(getStreamingLinks().netflix)} className="streaming-badge">
                   <span style={{ fontSize: '1.4rem' }}>🎬</span>
                   <span>Netflix</span>
                 </button>
               )}
               {hasPrimeVideo && (
-                <button onClick={() => openLink(getStreamingLinks().primeVideo)} className="streaming-badge prime-video">
+                <button onClick={() => openLink(getStreamingLinks().primeVideo)} className="streaming-badge">
                   <span style={{ fontSize: '1.4rem' }}>▶️</span>
                   <span>Prime Video</span>
                 </button>
               )}
               {hasDisneyPlus && (
-                <button onClick={() => openLink(getStreamingLinks().disneyPlus)} className="streaming-badge disney-plus">
+                <button onClick={() => openLink(getStreamingLinks().disneyPlus)} className="streaming-badge">
                   <span style={{ fontSize: '1.4rem' }}>⭐</span>
                   <span>Disney+</span>
                 </button>
               )}
               {hasAppleTV && (
-                <button onClick={() => openLink(getStreamingLinks().appleTV)} className="streaming-badge apple-tv">
+                <button onClick={() => openLink(getStreamingLinks().appleTV)} className="streaming-badge">
                   <span style={{ fontSize: '1.4rem' }}>🍎</span>
                   <span>Apple TV</span>
                 </button>
               )}
-              <button
-                onClick={() => openLink(getStreamingLinks().voirDrama)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  padding: '0.75rem 1.25rem',
-                  backgroundColor: 'rgba(96, 224, 255, 0.15)',
-                  border: '1px solid rgba(96, 224, 255, 0.4)',
-                  borderRadius: '12px',
-                  color: '#60e0ff',
-                  fontWeight: '600',
-                  fontSize: '0.95rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease'
-                }}
-              >
+              <button onClick={() => openLink(getStreamingLinks().voirDrama)} className="streaming-badge">
                 <span style={{ fontSize: '1.2rem' }}>🔍</span>
                 <span>VoirDrama</span>
               </button>
-              <button
-                onClick={copyTitleAndOpenVoirDrama}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.75rem',
-                  padding: '0.75rem 1.25rem',
-                  backgroundColor: 'rgba(143, 156, 255, 0.15)',
-                  border: '1px solid rgba(143, 156, 255, 0.4)',
-                  borderRadius: '12px',
-                  color: '#8f9cff',
-                  fontWeight: '600',
-                  fontSize: '0.95rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease'
-                }}
-                title="Copie le titre du drama et ouvre VoirDrama"
-              >
+              <button onClick={copyTitleAndOpenVoirDrama} className="streaming-badge" title="Copie le titre du drama et ouvre VoirDrama">
                 <span style={{ fontSize: '1.2rem' }}>📋</span>
                 <span>Copier & VoirDrama</span>
               </button>
