@@ -3,9 +3,8 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import { translateLongText } from './translationService'
 
-// Je retire les anciennes propriétés de routage manuel
 export default function TmdbPreview({ session }) {
-  // J'instancie les outils nécessaires pour interroger l'URL et la mémoire de l'application
+  // J'extrais le nom formaté depuis l'URL et j'initialise l'accès à la mémoire de navigation
   const { slug } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
@@ -18,17 +17,16 @@ export default function TmdbPreview({ session }) {
   const [message, setMessage] = useState('')
   const [tvGenreList, setTvGenreList] = useState([])
   
-  // Je récupère l'identifiant exact transmis depuis la page précédente
-  const [tmdbId, setTmdbId] = useState(location.state?.tmdbId || null)
+  // Je récupère l'identifiant exact transmis de manière invisible par la page précédente
+  const [internalTmdbId, setInternalTmdbId] = useState(location.state?.tmdbId || null)
 
   useEffect(() => {
-    if (tmdbId) {
-      fetchGenresAndDetails(tmdbId)
+    if (internalTmdbId) {
+      fetchGenresAndDetails(internalTmdbId)
     } else if (slug) {
-      // Je déclenche une méthode de secours si l'identifiant n'est pas trouvé dans le cache
       findTmdbIdFromSlug(slug)
     }
-  }, [slug, tmdbId])
+  }, [slug, internalTmdbId])
 
   const getLatinText = (originalText, fallbackText) => {
     const latinPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ0-9 .,'\-()]+$/
@@ -48,7 +46,7 @@ export default function TmdbPreview({ session }) {
     return statusMap[status] || status
   }
 
-  // J'implémente la recherche textuelle de secours vers TMDB
+  // Je prévois une recherche de secours si l'application est chargée directement via cette URL
   const findTmdbIdFromSlug = async (searchSlug) => {
     const apiKey = import.meta.env.VITE_TMDB_API_KEY
     const query = encodeURIComponent(searchSlug.replace(/-/g, ' '))
@@ -56,7 +54,7 @@ export default function TmdbPreview({ session }) {
       const res = await fetch(`https://api.themoviedb.org/3/search/tv?query=${query}&language=fr-FR&api_key=${apiKey}`)
       const data = await res.json()
       if (data.results && data.results.length > 0) {
-         setTmdbId(data.results[0].id)
+         setInternalTmdbId(data.results[0].id)
       } else {
          setLoading(false)
          setMessage('Série introuvable.')
@@ -168,7 +166,7 @@ export default function TmdbPreview({ session }) {
           status: 'To Watch',
           poster_url: posterUrl,
           user_id: userId,
-          tmdb_id: tmdbId,
+          tmdb_id: internalTmdbId,
           tmdb_status: details.status || null,
           first_air_date: details.first_air_date || null,
           number_of_seasons: details.number_of_seasons || null,
