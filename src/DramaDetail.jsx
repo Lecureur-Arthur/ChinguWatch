@@ -351,6 +351,7 @@ export default function DramaDetail() {
               <div className="panel-card">
                 <span className="panel-label">Changer de catégorie</span>
                 <select id="drama-status" value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className="status-select">
+                  <option value="Not Found">Vidéos introuvables</option>
                   <option value="To Watch">À voir</option>
                   <option value="Watching">En cours</option>
                   <option value="Watched">Vu</option>

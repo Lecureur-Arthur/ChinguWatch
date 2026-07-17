@@ -266,7 +266,7 @@ export default function DramaList({ session, status }) {
                       className="status-select"
                       style={{ marginTop: '1rem' }}
                     >
-                      <option value="Not Found">Streaming Introuvable</option>
+                      <option value="Not Found">Vidéos introuvables</option>
                       <option value="To Watch">À voir</option>
                       <option value="Watching">En cours</option>
                       <option value="Watched">Vu</option>
