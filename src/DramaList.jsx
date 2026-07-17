@@ -1,26 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 
 export default function DramaList({ session, status }) {
-  useEffect(() => {
-    // 1. Déclare une fonction asynchrone interne
-    const fetchDramas = async () => {
-      const { data, error } = await supabase
-        .from('dramas')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .eq('status', status)
-      
-      if (data) {
-        setDramas(data)
-      }
-    }
-
-    // 2. Appelle la fonction
-    fetchDramas()
-  }, [session, status]) // La fonction se relance si le statut change
-
   const [dramas, setDramas] = useState([])
   const [loading, setLoading] = useState(true)
   
@@ -34,6 +16,22 @@ export default function DramaList({ session, status }) {
   const [sortBy, setSortBy] = useState(status === 'Watched' ? 'personal_rating_desc' : 'rating_desc')
 
   const navigate = useNavigate()
+
+  useEffect(() => {
+    const fetchDramas = async () => {
+      const { data, error } = await supabase
+        .from('dramas')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .eq('status', status)
+      
+      if (data) {
+        setDramas(data)
+      }
+    }
+
+    fetchDramas()
+  }, [session, status]) 
 
   useEffect(() => {
     // Je force la réinitialisation du tri par défaut lors de la navigation entre les onglets
@@ -71,6 +69,7 @@ export default function DramaList({ session, status }) {
   }
 
   const handleStatusChange = async (drama, newStatus, e) => {
+    e.preventDefault()
     e.stopPropagation()
     
     if (newStatus === 'Watched') {
@@ -92,6 +91,7 @@ export default function DramaList({ session, status }) {
   }
 
   const submitReview = async (id, e) => {
+    e.preventDefault()
     e.stopPropagation()
     if (!reviewRating) {
       alert("La note personnelle est obligatoire pour passer une série en Vu.")
@@ -116,11 +116,13 @@ export default function DramaList({ session, status }) {
   }
 
   const cancelReview = (e) => {
+    e.preventDefault()
     e.stopPropagation()
     setReviewingId(null)
   }
 
   const handleDelete = async (id, e) => {
+    e.preventDefault()
     e.stopPropagation()
     const isConfirmed = window.confirm("Es-tu sûr de vouloir retirer ce drama de ta liste ?")
     if (!isConfirmed) return
@@ -200,11 +202,11 @@ export default function DramaList({ session, status }) {
       ) : (
         <div className="drama-grid">
           {processedDramas.map((drama) => (
-            <div 
+            <Link 
               key={drama.id} 
+              to={`/drama/${createSlug(drama.title)}`}
               className="drama-card" 
-              onClick={() => navigate(`/drama/${createSlug(drama.title)}`)}
-              style={{ cursor: 'pointer' }}
+              style={{ textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column' }}
             >
               {drama.poster_url ? (
                 <img src={drama.poster_url} alt={drama.title} className="drama-poster" />
@@ -246,12 +248,14 @@ export default function DramaList({ session, status }) {
                         placeholder="Note (/5) *" 
                         value={reviewRating} 
                         onChange={(e) => setReviewRating(e.target.value)} 
+                        onClick={(e) => e.preventDefault()}
                         style={{ padding: '0.5rem', fontSize: '0.9rem' }}
                       />
                       <textarea 
                         placeholder="Commentaire (optionnel)" 
                         value={reviewComment} 
                         onChange={(e) => setReviewComment(e.target.value)} 
+                        onClick={(e) => e.preventDefault()}
                         style={{ minHeight: '50px', padding: '0.5rem', fontSize: '0.9rem' }}
                       />
                       <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
@@ -263,6 +267,7 @@ export default function DramaList({ session, status }) {
                     <select 
                       value={drama.status} 
                       onChange={(e) => handleStatusChange(drama, e.target.value, e)} 
+                      onClick={(e) => e.preventDefault()}
                       className="status-select"
                       style={{ marginTop: '1rem' }}
                     >
@@ -281,7 +286,7 @@ export default function DramaList({ session, status }) {
                   </button>
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}
