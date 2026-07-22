@@ -21,6 +21,16 @@ export default function DramaDetail() {
   const [saving, setSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState('')
   const [editMode, setEditMode] = useState(false)
+
+  // --- États pour la boîte modale de durée ---
+  const [runtimeModalOpen, setRuntimeModalOpen] = useState(false)
+  const [runtimeMode, setRuntimeMode] = useState('average') // 'average', 'individual' ou 'total'
+  const [avgHours, setAvgHours] = useState('')
+  const [avgMinutes, setAvgMinutes] = useState('')
+  const [totalHours, setTotalHours] = useState('')
+  const [totalMinutes, setTotalMinutes] = useState('')
+  const [individualRuntimes, setIndividualRuntimes] = useState([])
+
   const latinPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ0-9 .,'\-()]+$/
 
   const createSlug = (title) => {
@@ -253,6 +263,82 @@ export default function DramaDetail() {
     setSaving(false)
   }
 
+  // --- Fonctions de la Modale de Durée ---
+  const openRuntimeModal = (e) => {
+    e.preventDefault()
+    setRuntimeMode('average')
+    
+    const baseDuration = localDrama?.episode_run_time || 0
+    const h = baseDuration >= 60 ? Math.floor(baseDuration / 60).toString() : ''
+    const m = baseDuration > 0 ? (baseDuration % 60).toString() : ''
+
+    setAvgHours(h)
+    setAvgMinutes(m)
+    setTotalHours('')
+    setTotalMinutes('')
+    
+    const episodesCount = localDrama?.number_of_episodes || tmdbData?.number_of_episodes || 1
+    setIndividualRuntimes(Array(episodesCount).fill({ h, m }))
+    
+    setRuntimeModalOpen(true)
+  }
+
+  const handleIndividualChange = (index, field, value) => {
+    const newRuntimes = [...individualRuntimes]
+    newRuntimes[index] = { ...newRuntimes[index], [field]: value }
+    setIndividualRuntimes(newRuntimes)
+  }
+
+  const handleSaveRuntime = async () => {
+    if (!localDrama) return
+
+    let calculatedRuntime = 0
+    const episodesCount = localDrama.number_of_episodes || tmdbData?.number_of_episodes || 1
+
+    if (runtimeMode === 'average') {
+      const h = parseInt(avgHours, 10) || 0
+      const m = parseInt(avgMinutes, 10) || 0
+      calculatedRuntime = (h * 60) + m
+    } else if (runtimeMode === 'individual') {
+      const totalMins = individualRuntimes.reduce((acc, val) => {
+        const h = parseInt(val.h, 10) || 0
+        const m = parseInt(val.m, 10) || 0
+        return acc + (h * 60) + m
+      }, 0)
+      calculatedRuntime = totalMins > 0 ? Math.round(totalMins / episodesCount) : 0
+    } else {
+      const hours = parseInt(totalHours, 10) || 0
+      const minutes = parseInt(totalMinutes, 10) || 0
+      const totalMins = (hours * 60) + minutes
+      calculatedRuntime = Math.round(totalMins / episodesCount)
+    }
+
+    if (isNaN(calculatedRuntime) || calculatedRuntime <= 0) {
+      alert("Veuillez entrer une durée valide.")
+      return
+    }
+
+    const { error } = await supabase
+      .from('dramas')
+      .update({ episode_run_time: calculatedRuntime })
+      .eq('id', localDrama.id)
+
+    if (error) {
+      alert("Erreur lors de la mise à jour : " + error.message)
+    } else {
+      setLocalDrama({ ...localDrama, episode_run_time: calculatedRuntime })
+      setRuntimeModalOpen(false)
+    }
+  }
+
+  const getFormattedDuration = (runTime) => {
+    if (!runTime) return 'Inconnue'
+    const h = Math.floor(runTime / 60)
+    const m = runTime % 60
+    return `${h > 0 ? `${h}h ` : ''}${m > 0 ? `${m}m` : ''}`.trim()
+  }
+
+  // --- Fonctions de Streaming ---
   const getWatchProviders = () => {
     if (!tmdbData?.['watch/providers']?.results?.FR) return []
     const frProviders = tmdbData['watch/providers'].results.FR
@@ -464,14 +550,23 @@ export default function DramaDetail() {
               <span className="meta-label">Saisons</span>
               <span className="meta-value">{tmdbData.number_of_seasons || '?'}</span>
             </div>
-            <div className="meta-item">
-              <span className="meta-label">Durée moyenne</span>
+            
+            {/* Bloc Durée Moyenne Modifié */}
+            <div className="meta-item" style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="meta-label" style={{ margin: 0 }}>Durée moyenne</span>
+                <button
+                  onClick={openRuntimeModal}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--primary-color)', cursor: 'pointer', fontSize: '0.75rem', padding: '0', textDecoration: 'underline', opacity: 0.8 }}
+                >
+                  {localDrama.episode_run_time ? '(Éditer)' : '+ Ajouter'}
+                </button>
+              </div>
               <span className="meta-value">
-                {tmdbData.episode_run_time && tmdbData.episode_run_time.length > 0 
-                  ? `${tmdbData.episode_run_time[0]} min` 
-                  : 'Inconnue'}
+                {getFormattedDuration(localDrama.episode_run_time)}
               </span>
             </div>
+
             <div className="meta-item">
               <span className="meta-label">Première diffusion</span>
               <span className="meta-value">
@@ -563,6 +658,89 @@ export default function DramaDetail() {
           )}
         </>
       )}
+
+      {/* --- Boîte Modale de Durée --- */}
+      {runtimeModalOpen && (
+        <div 
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)', zIndex: 1000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(5px)'
+          }} 
+          onClick={() => setRuntimeModalOpen(false)}
+        >
+          <div 
+            style={{
+              background: 'var(--surface)', padding: '2rem', borderRadius: '24px',
+              border: '1px solid var(--border-color)', width: '90%', maxWidth: '500px',
+              boxShadow: '0 24px 80px rgba(0, 0, 0, 0.5)'
+            }} 
+            onClick={e => e.stopPropagation()} 
+          >
+            <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--primary-color)' }}>Modifier la durée</h3>
+            <p style={{ margin: '0 0 1.5rem 0', color: 'var(--secondary-text)', fontSize: '0.9rem' }}>{localDrama?.title}</p>
+            
+            <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '1rem', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+                <input type="radio" checked={runtimeMode === 'average'} onChange={() => setRuntimeMode('average')} style={{ width: 'auto', boxShadow: 'none' }} /> Moyenne
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+                <input type="radio" checked={runtimeMode === 'individual'} onChange={() => setRuntimeMode('individual')} style={{ width: 'auto', boxShadow: 'none' }} /> Individuel
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+                <input type="radio" checked={runtimeMode === 'total'} onChange={() => setRuntimeMode('total')} style={{ width: 'auto', boxShadow: 'none' }} /> Total
+              </label>
+            </div>
+
+            {runtimeMode === 'average' && (
+              <div style={{ marginBottom: '2rem' }}>
+                <label className="panel-label">Durée moyenne d'un épisode</label>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <input type="number" className="input-field" value={avgHours} onChange={e => setAvgHours(e.target.value)} placeholder="Heures" style={{ flex: 1 }} />
+                  <input type="number" className="input-field" value={avgMinutes} onChange={e => setAvgMinutes(e.target.value)} placeholder="Minutes" style={{ flex: 1 }} />
+                </div>
+                <p style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.75rem', fontStyle: 'italic' }}>
+                  S'appliquera uniformément aux {localDrama?.number_of_episodes || tmdbData?.number_of_episodes || 1} épisodes.
+                </p>
+              </div>
+            )}
+
+            {runtimeMode === 'individual' && (
+              <div style={{ marginBottom: '2rem' }}>
+                <label className="panel-label" style={{ marginBottom: '0.5rem' }}>Durée de chaque épisode</label>
+                <div style={{ maxHeight: '250px', overflowY: 'auto', paddingRight: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {individualRuntimes.map((duration, index) => (
+                    <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#ccc', width: '45px' }}>Ép. {index + 1}</span>
+                      <input type="number" className="input-field" style={{ padding: '0.4rem', fontSize: '0.9rem', flex: 1 }} value={duration.h} onChange={e => handleIndividualChange(index, 'h', e.target.value)} placeholder="Heures" />
+                      <input type="number" className="input-field" style={{ padding: '0.4rem', fontSize: '0.9rem', flex: 1 }} value={duration.m} onChange={e => handleIndividualChange(index, 'm', e.target.value)} placeholder="Minutes" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {runtimeMode === 'total' && (
+              <div style={{ marginBottom: '2rem' }}>
+                <label className="panel-label">Durée totale de la série</label>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <input type="number" className="input-field" value={totalHours} onChange={e => setTotalHours(e.target.value)} placeholder="Heures" style={{ flex: 1 }} />
+                  <input type="number" className="input-field" value={totalMinutes} onChange={e => setTotalMinutes(e.target.value)} placeholder="Minutes" style={{ flex: 1 }} />
+                </div>
+                <p style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.75rem', fontStyle: 'italic' }}>
+                  Sera divisé par les {localDrama?.number_of_episodes || tmdbData?.number_of_episodes || 1} épisodes pour la moyenne.
+                </p>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button className="primary-btn" onClick={handleSaveRuntime} style={{ flex: 1 }}>Enregistrer</button>
+              <button className="secondary-btn" onClick={() => setRuntimeModalOpen(false)} style={{ flex: 1 }}>Annuler</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
