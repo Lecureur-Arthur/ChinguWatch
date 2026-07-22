@@ -6,6 +6,9 @@ export default function DramaList({ session, status }) {
   const [dramas, setDramas] = useState([])
   const [loading, setLoading] = useState(true)
   
+  // État pour stocker les titres TMDB récupérés dynamiquement { [dramaId]: { original, english } }
+  const [tmdbTitlesMap, setTmdbTitlesMap] = useState({})
+
   const [reviewingId, setReviewingId] = useState(null)
   const [reviewRating, setReviewRating] = useState('')
   const [reviewComment, setReviewComment] = useState('')
@@ -13,7 +16,7 @@ export default function DramaList({ session, status }) {
   // --- États pour la boîte modale de durée ---
   const [runtimeModalOpen, setRuntimeModalOpen] = useState(false)
   const [runtimeDrama, setRuntimeDrama] = useState(null)
-  const [runtimeMode, setRuntimeMode] = useState('average') // 'average', 'individual' ou 'total'
+  const [runtimeMode, setRuntimeMode] = useState('average')
   
   const [avgHours, setAvgHours] = useState('')
   const [avgMinutes, setAvgMinutes] = useState('')
@@ -21,7 +24,7 @@ export default function DramaList({ session, status }) {
   const [totalHours, setTotalHours] = useState('')
   const [totalMinutes, setTotalMinutes] = useState('')
   
-  const [individualRuntimes, setIndividualRuntimes] = useState([]) // Tableau d'objets { h: '', m: '' }
+  const [individualRuntimes, setIndividualRuntimes] = useState([])
 
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState(status === 'Watched' ? 'personal_rating_desc' : 'rating_desc')
@@ -29,18 +32,6 @@ export default function DramaList({ session, status }) {
   const navigate = useNavigate()
 
   useEffect(() => {
-    const fetchDramas = async () => {
-      const { data, error } = await supabase
-        .from('dramas')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .eq('status', status)
-      
-      if (data) {
-        setDramas(data)
-      }
-    }
-
     fetchDramas()
   }, [session, status]) 
 
@@ -60,22 +51,69 @@ export default function DramaList({ session, status }) {
 
     if (error) {
       console.error("Erreur lors de la récupération des séries :", error)
+      setDramas([])
+      setLoading(false)
     } else {
-      setDramas(data || [])
+      const dramasList = data || []
+      setDramas(dramasList)
+      setLoading(false)
+      fetchTmdbTitlesAsync(dramasList)
     }
-    
-    setLoading(false)
+  }
+
+  const fetchTmdbTitlesAsync = async (dramasArray) => {
+    const apiKey = import.meta.env.VITE_TMDB_API_KEY
+    if (!apiKey) return
+
+    const titlesMap = {}
+
+    for (const drama of dramasArray) {
+      let tmdbId = drama.tmdb_id
+
+      try {
+        if (!tmdbId && drama.title) {
+          const query = encodeURIComponent(drama.title)
+          const res = await fetch(`https://api.themoviedb.org/3/search/tv?query=${query}&api_key=${apiKey}`)
+          const searchData = await res.json()
+          if (searchData.results && searchData.results.length > 0) {
+            tmdbId = searchData.results[0].id
+          }
+        }
+
+        if (tmdbId) {
+          const [resFr, resEn] = await Promise.all([
+            fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?language=fr-FR&api_key=${apiKey}`),
+            fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?language=en-US&api_key=${apiKey}`)
+          ])
+
+          const dataFr = await resFr.json()
+          const dataEn = await resEn.json()
+
+          titlesMap[drama.id] = {
+            original: dataFr.original_name || drama.title,
+            english: dataEn.name || dataEn.original_name || drama.title
+          }
+        } else {
+          titlesMap[drama.id] = {
+            original: drama.title,
+            english: drama.title
+          }
+        }
+      } catch (err) {
+        titlesMap[drama.id] = {
+          original: drama.title,
+          english: drama.title
+        }
+      }
+    }
+
+    setTmdbTitlesMap(prev => ({ ...prev, ...titlesMap }))
   }
 
   const createSlug = (title) => {
     return title
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .trim()
+      ? title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim()
+      : ''
   }
 
   const handleStatusChange = async (drama, newStatus, e) => {
@@ -149,7 +187,6 @@ export default function DramaList({ session, status }) {
     }
   }
 
-  // --- Logique d'ouverture et de sauvegarde de la modale ---
   const openRuntimeModal = (drama, e) => {
     e.preventDefault()
     e.stopPropagation()
@@ -157,7 +194,6 @@ export default function DramaList({ session, status }) {
     setRuntimeMode('average')
     
     const baseDuration = drama.episode_run_time || 0
-    // Conversion des minutes totales en Heures/Minutes pour l'affichage initial
     const h = baseDuration >= 60 ? Math.floor(baseDuration / 60).toString() : ''
     const m = baseDuration > 0 ? (baseDuration % 60).toString() : ''
 
@@ -166,7 +202,6 @@ export default function DramaList({ session, status }) {
     setTotalHours('')
     setTotalMinutes('')
     
-    // Prépare un tableau avec autant de cases que d'épisodes contenant les valeurs {h, m}
     const episodesCount = drama.number_of_episodes || 1
     setIndividualRuntimes(Array(episodesCount).fill({ h, m }))
     
@@ -241,29 +276,23 @@ export default function DramaList({ session, status }) {
   const processedDramas = dramas
     .filter((drama) => {
       if (!searchQuery) return true
-      return drama.title.toLowerCase().includes(searchQuery.toLowerCase())
+      const titles = tmdbTitlesMap[drama.id]
+      const query = searchQuery.toLowerCase()
+      return drama.title.toLowerCase().includes(query) || 
+             (titles?.original && titles.original.toLowerCase().includes(query)) ||
+             (titles?.english && titles.english.toLowerCase().includes(query))
     })
     .sort((a, b) => {
-      if (sortBy === 'date_desc') {
-        return new Date(b.created_at) - new Date(a.created_at)
-      }
-      if (sortBy === 'date_asc') {
-        return new Date(a.created_at) - new Date(b.created_at)
-      }
-      if (sortBy === 'alpha_asc') {
-        return a.title.localeCompare(b.title)
-      }
-      if (sortBy === 'rating_desc') {
-        return (b.site_rating || 0) - (a.site_rating || 0)
-      }
-      if (sortBy === 'personal_rating_desc') {
-        return (b.personal_rating || 0) - (a.personal_rating || 0)
-      }
+      if (sortBy === 'date_desc') return new Date(b.created_at) - new Date(a.created_at)
+      if (sortBy === 'date_asc') return new Date(a.created_at) - new Date(b.created_at)
+      if (sortBy === 'alpha_asc') return (a.title || '').localeCompare(b.title || '')
+      if (sortBy === 'rating_desc') return (b.site_rating || 0) - (a.site_rating || 0)
+      if (sortBy === 'personal_rating_desc') return (b.personal_rating || 0) - (a.personal_rating || 0)
       return 0
     })
 
   if (loading) {
-    return <div style={{ textAlign: 'center', marginTop: '3rem', fontSize: '1.2rem' }}>Chargement de la bibliothèque...</div>
+    return <div style={{ textAlign: 'center', marginTop: '3rem', fontSize: '1.2rem', color: '#fff' }}>Chargement de la bibliothèque...</div>
   }
 
   if (dramas.length === 0) {
@@ -300,113 +329,128 @@ export default function DramaList({ session, status }) {
         <div style={{ textAlign: 'center', marginTop: '2rem', color: 'var(--secondary-text)', fontSize: '1.1rem' }}>Aucun résultat pour cette recherche.</div>
       ) : (
         <div className="drama-grid">
-          {processedDramas.map((drama) => (
-            <Link 
-              key={drama.id} 
-              to={`/drama/${createSlug(drama.title)}`}
-              className="drama-card" 
-              style={{ textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column' }}
-            >
-              {drama.poster_url ? (
-                <img src={drama.poster_url} alt={drama.title} className="drama-poster" />
-              ) : (
-                <div className="drama-poster" style={{ backgroundColor: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ color: '#c7d0ff' }}>Pas d'image</span>
-                </div>
-              )}
-              <div className="drama-info">
-                <h4 className="drama-title" title={drama.title}>{drama.title}</h4>
-                <div className="drama-genres">{drama.genre || 'Aucun genre spécifié'}</div>
-                
-                {drama.number_of_episodes && (
-                  <div 
-                    onClick={(e) => e.stopPropagation()} 
-                    style={{ fontSize: '0.85rem', color: '#a0a0a0', marginTop: '0.25rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}
-                  >
-                    ⏳ {getDurationText(drama.number_of_episodes, drama.episode_run_time)}
-                    
-                    <button 
-                      onClick={(e) => openRuntimeModal(drama, e)}
-                      style={{ background: 'transparent', border: 'none', color: 'var(--primary-color)', cursor: 'pointer', fontSize: '0.75rem', padding: '0', textDecoration: 'underline', opacity: 0.8 }}
-                    >
-                      {drama.episode_run_time ? '(Éditer)' : '+ Ajouter durée'}
-                    </button>
+          {processedDramas.map((drama) => {
+            const titles = tmdbTitlesMap[drama.id] || { original: drama.title, english: drama.title }
+            const originalTitle = titles.original
+            const englishTitle = titles.english
+
+            return (
+              <Link 
+                key={drama.id} 
+                to={`/drama/${createSlug(englishTitle)}`}
+                className="drama-card" 
+                style={{ textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column' }}
+              >
+                {drama.poster_url ? (
+                  <img src={drama.poster_url} alt={englishTitle} className="drama-poster" />
+                ) : (
+                  <div className="drama-poster" style={{ backgroundColor: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ color: '#c7d0ff' }}>Pas d'image</span>
                   </div>
                 )}
-                
-                <div className="drama-ratings">
-                  <span title="Note TMDB">TMDB : <span className="rating-badge">{drama.site_rating || '-'}</span></span>
-                  <span title="Note VoirDrama">VD : <span className="rating-badge">{drama.voirdrama_rating || '-'}</span></span>
-                </div>
-
-                {status === 'Watched' && drama.personal_rating && (
-                  <div className="panel-card" style={{ marginTop: '1rem', borderLeft: '4px solid var(--primary-color)', padding: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <span className="panel-label" style={{ margin: 0 }}>Ma Note</span>
-                      <strong style={{ color: 'var(--primary-color)', fontSize: '1.1rem' }}>{drama.personal_rating} / 5</strong>
-                    </div>
-                    {drama.comment && (
-                      <div style={{ fontSize: '0.9rem', color: '#ccc', fontStyle: 'italic', lineHeight: '1.4', marginTop: '0.5rem' }}>
-                        "{drama.comment}"
-                      </div>
-                    )}
+                <div className="drama-info">
+                  
+                  {/* --- HIÉRARCHIE INVERSÉE : Titre Anglais en gros, Titre Original en dessous --- */}
+                  <h4 className="drama-title" title={englishTitle} style={{ marginBottom: '0.1rem', fontSize: '1.1rem' }}>
+                    {englishTitle}
+                  </h4>
+                  
+                  <div style={{ fontSize: '0.85rem', color: '#a0a0a0', fontStyle: 'italic', marginBottom: '0.5rem' }}>
+                    {originalTitle}
                   </div>
-                )}
 
-                <div onClick={(e) => e.stopPropagation()}>
-                  {reviewingId === drama.id ? (
-                    <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', backgroundColor: '#1a1a1a', padding: '0.8rem', borderRadius: '8px' }}>
-                      <input 
-                        type="number" 
-                        step="0.1" 
-                        max="5" 
-                        placeholder="Note (/5) *" 
-                        value={reviewRating} 
-                        onChange={(e) => setReviewRating(e.target.value)} 
-                        onClick={(e) => e.preventDefault()}
-                        style={{ padding: '0.5rem', fontSize: '0.9rem' }}
-                      />
-                      <textarea 
-                        placeholder="Commentaire (optionnel)" 
-                        value={reviewComment} 
-                        onChange={(e) => setReviewComment(e.target.value)} 
-                        onClick={(e) => e.preventDefault()}
-                        style={{ minHeight: '50px', padding: '0.5rem', fontSize: '0.9rem' }}
-                      />
-                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                        <button onClick={(e) => submitReview(drama.id, e)} style={{ padding: '0.5rem', fontSize: '0.85rem' }}>Valider</button>
-                        <button onClick={cancelReview} style={{ padding: '0.5rem', fontSize: '0.85rem', backgroundColor: '#555' }}>Annuler</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <select 
-                      value={drama.status} 
-                      onChange={(e) => handleStatusChange(drama, e.target.value, e)} 
-                      onClick={(e) => e.preventDefault()}
-                      className="status-select"
-                      style={{ marginTop: '1rem' }}
+                  <div className="drama-genres" style={{ marginTop: '0.5rem' }}>{drama.genre || 'Aucun genre spécifié'}</div>
+                  
+                  {drama.number_of_episodes && (
+                    <div 
+                      onClick={(e) => e.stopPropagation()} 
+                      style={{ fontSize: '0.85rem', color: '#a0a0a0', marginTop: '0.25rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}
                     >
-                      <option value="Not Found">Vidéos introuvables</option>
-                      <option value="To Watch">À voir</option>
-                      <option value="Watching">En cours</option>
-                      <option value="Watched">Vu</option>
-                    </select>
+                      ⏳ {getDurationText(drama.number_of_episodes, drama.episode_run_time)}
+                      
+                      <button 
+                        onClick={(e) => openRuntimeModal(drama, e)}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--primary-color)', cursor: 'pointer', fontSize: '0.75rem', padding: '0', textDecoration: 'underline', opacity: 0.8 }}
+                      >
+                        {drama.episode_run_time ? '(Éditer)' : '+ Ajouter durée'}
+                      </button>
+                    </div>
+                  )}
+                  
+                  <div className="drama-ratings">
+                    <span title="Note TMDB">TMDB : <span className="rating-badge">{drama.site_rating || '-'}</span></span>
+                    <span title="Note VoirDrama">VD : <span className="rating-badge">{drama.voirdrama_rating || '-'}</span></span>
+                  </div>
+
+                  {status === 'Watched' && drama.personal_rating && (
+                    <div className="panel-card" style={{ marginTop: '1rem', borderLeft: '4px solid var(--primary-color)', padding: '1rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <span className="panel-label" style={{ margin: 0 }}>Ma Note</span>
+                        <strong style={{ color: 'var(--primary-color)', fontSize: '1.1rem' }}>{drama.personal_rating} / 5</strong>
+                      </div>
+                      {drama.comment && (
+                        <div style={{ fontSize: '0.9rem', color: '#ccc', fontStyle: 'italic', lineHeight: '1.4', marginTop: '0.5rem' }}>
+                          "{drama.comment}"
+                        </div>
+                      )}
+                    </div>
                   )}
 
-                  <button 
-                    onClick={(e) => handleDelete(drama.id, e)}
-                    style={{ marginTop: '0.5rem', backgroundColor: 'transparent', border: '1px solid #d32f2f', color: '#d32f2f', padding: '0.5rem', fontSize: '0.9rem', width: '100%', borderRadius: '8px', cursor: 'pointer' }}
-                  >
-                    Supprimer de la liste
-                  </button>
+                  <div onClick={(e) => e.stopPropagation()}>
+                    {reviewingId === drama.id ? (
+                      <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', backgroundColor: '#1a1a1a', padding: '0.8rem', borderRadius: '8px' }}>
+                        <input 
+                          type="number" 
+                          step="0.1" 
+                          max="5" 
+                          placeholder="Note (/5) *" 
+                          value={reviewRating} 
+                          onChange={(e) => setReviewRating(e.target.value)} 
+                          onClick={(e) => e.preventDefault()}
+                          style={{ padding: '0.5rem', fontSize: '0.9rem' }}
+                        />
+                        <textarea 
+                          placeholder="Commentaire (optionnel)" 
+                          value={reviewComment} 
+                          onChange={(e) => setReviewComment(e.target.value)} 
+                          onClick={(e) => e.preventDefault()}
+                          style={{ minHeight: '50px', padding: '0.5rem', fontSize: '0.9rem' }}
+                        />
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                          <button onClick={(e) => submitReview(drama.id, e)} style={{ padding: '0.5rem', fontSize: '0.85rem' }}>Valider</button>
+                          <button onClick={cancelReview} style={{ padding: '0.5rem', fontSize: '0.85rem', backgroundColor: '#555' }}>Annuler</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <select 
+                        value={drama.status} 
+                        onChange={(e) => handleStatusChange(drama, e.target.value, e)} 
+                        onClick={(e) => e.preventDefault()}
+                        className="status-select"
+                        style={{ marginTop: '1rem' }}
+                      >
+                        <option value="Not Found">Vidéos introuvables</option>
+                        <option value="To Watch">À voir</option>
+                        <option value="Watching">En cours</option>
+                        <option value="Watched">Vu</option>
+                      </select>
+                    )}
+
+                    <button 
+                      onClick={(e) => handleDelete(drama.id, e)}
+                      style={{ marginTop: '0.5rem', backgroundColor: 'transparent', border: '1px solid #d32f2f', color: '#d32f2f', padding: '0.5rem', fontSize: '0.9rem', width: '100%', borderRadius: '8px', cursor: 'pointer' }}
+                    >
+                      Supprimer de la liste
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            )
+          })}
         </div>
       )}
 
-      {/* --- Boîte Modale (Apparaît au-dessus du reste) --- */}
+      {/* --- Boîte Modale de Durée --- */}
       {runtimeModalOpen && runtimeDrama && (
         <div 
           style={{
@@ -457,7 +501,6 @@ export default function DramaList({ session, status }) {
               </label>
             </div>
 
-            {/* --- Mode Moyenne --- */}
             {runtimeMode === 'average' && (
               <div style={{ marginBottom: '2rem' }}>
                 <label className="panel-label">Durée moyenne d'un épisode</label>
@@ -481,13 +524,9 @@ export default function DramaList({ session, status }) {
                     />
                   </div>
                 </div>
-                <p style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.75rem', fontStyle: 'italic' }}>
-                  S'appliquera uniformément aux {runtimeDrama.number_of_episodes || 1} épisodes.
-                </p>
               </div>
             )}
 
-            {/* --- Mode Individuel --- */}
             {runtimeMode === 'individual' && (
               <div style={{ marginBottom: '2rem' }}>
                 <label className="panel-label" style={{ marginBottom: '0.5rem' }}>Durée de chaque épisode</label>
@@ -517,7 +556,6 @@ export default function DramaList({ session, status }) {
               </div>
             )}
 
-            {/* --- Mode Total --- */}
             {runtimeMode === 'total' && (
               <div style={{ marginBottom: '2rem' }}>
                 <label className="panel-label">Durée totale de la série</label>
@@ -541,9 +579,6 @@ export default function DramaList({ session, status }) {
                     />
                   </div>
                 </div>
-                <p style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.75rem', fontStyle: 'italic' }}>
-                  Sera divisé par les {runtimeDrama.number_of_episodes || 1} épisodes pour calculer la moyenne.
-                </p>
               </div>
             )}
 

@@ -9,6 +9,8 @@ export default function DramaDetail() {
 
   const [localDrama, setLocalDrama] = useState(null)
   const [tmdbData, setTmdbData] = useState(null)
+  const [englishTitle, setEnglishTitle] = useState('')
+  const [originalTitle, setOriginalTitle] = useState('')
   const [castNameMap, setCastNameMap] = useState({})
   const [loading, setLoading] = useState(true)
   const [synopsisLoading, setSynopsisLoading] = useState(false)
@@ -35,13 +37,8 @@ export default function DramaDetail() {
 
   const createSlug = (title) => {
     return title
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .trim()
+      ? title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim()
+      : ''
   }
 
   const getLatinText = (originalText, fallbackText = '') => {
@@ -126,6 +123,10 @@ export default function DramaDetail() {
     setPersonalRating(dbData.personal_rating ?? '')
     setCommentText(dbData.comment ?? '')
     setVoirDramaRating(dbData.voirdrama_rating ?? '')
+    
+    // Valeur par défaut en attendant TMDB
+    setEnglishTitle(dbData.title)
+    setOriginalTitle(dbData.title)
 
     const apiKey = import.meta.env.VITE_TMDB_API_KEY
     let tmdbId = dbData.tmdb_id || null
@@ -144,6 +145,10 @@ export default function DramaDetail() {
         const detailDataFr = await detailResFr.json()
         const detailDataEn = await detailResEn.json()
         setTmdbData(detailDataFr)
+
+        // Récupération des titres dynamiques
+        setOriginalTitle(detailDataFr.original_name || dbData.title)
+        setEnglishTitle(detailDataEn.name || detailDataEn.original_name || dbData.title)
 
         if (dbData.cast_list === null) {
           const frProviders = detailDataFr?.['watch/providers']?.results?.FR
@@ -362,7 +367,7 @@ export default function DramaDetail() {
   }
 
   const getStreamingLinks = () => {
-    const title = localDrama?.title || ''
+    const title = englishTitle || localDrama?.title || ''
     const encodedTitle = encodeURIComponent(title)
     const slugName = createSlug(title)
     
@@ -380,7 +385,7 @@ export default function DramaDetail() {
   }
 
   const copyTitleAndOpenVoirDrama = () => {
-    const title = localDrama?.title || ''
+    const title = englishTitle || localDrama?.title || ''
     navigator.clipboard.writeText(title).then(() => {
       window.open('https://voirdrama.to/', '_blank', 'noopener,noreferrer')
     }).catch(err => {
@@ -408,7 +413,7 @@ export default function DramaDetail() {
       <div className="detail-header">
         <div className="detail-poster-container">
           {localDrama.poster_url ? (
-            <img src={localDrama.poster_url} alt={localDrama.title} />
+            <img src={localDrama.poster_url} alt={englishTitle} />
           ) : (
             <div style={{ width: '100%', aspectRatio: '2/3', backgroundColor: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px' }}>
               <span style={{ color: '#888' }}>Pas d'image</span>
@@ -417,7 +422,15 @@ export default function DramaDetail() {
         </div>
 
         <div className="detail-info-container">
-          <h2 className="detail-title">{localDrama.title}</h2>
+          
+          {/* --- HIÉRARCHIE INVERSÉE : Titre Anglais en gros, Titre Original en dessous --- */}
+          <h2 className="detail-title" style={{ marginBottom: '0.1rem' }}>
+            {englishTitle}
+          </h2>
+          <div style={{ fontSize: '1.1rem', color: '#a0a0a0', fontStyle: 'italic', marginBottom: '1.5rem' }}>
+            {originalTitle}
+          </div>
+
           <div style={{ color: '#aaa', marginBottom: '1.5rem', fontSize: '1.1rem' }}>
             {localDrama.genre}
           </div>
@@ -678,7 +691,7 @@ export default function DramaDetail() {
             onClick={e => e.stopPropagation()} 
           >
             <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--primary-color)' }}>Modifier la durée</h3>
-            <p style={{ margin: '0 0 1.5rem 0', color: 'var(--secondary-text)', fontSize: '0.9rem' }}>{localDrama?.title}</p>
+            <p style={{ margin: '0 0 1.5rem 0', color: 'var(--secondary-text)', fontSize: '0.9rem' }}>{englishTitle}</p>
             
             <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '1rem', flexWrap: 'wrap' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
