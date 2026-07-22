@@ -10,9 +10,20 @@ export default function DramaList({ session, status }) {
   const [reviewRating, setReviewRating] = useState('')
   const [reviewComment, setReviewComment] = useState('')
 
-  const [searchQuery, setSearchQuery] = useState('')
+  // --- États pour la boîte modale de durée ---
+  const [runtimeModalOpen, setRuntimeModalOpen] = useState(false)
+  const [runtimeDrama, setRuntimeDrama] = useState(null)
+  const [runtimeMode, setRuntimeMode] = useState('average') // 'average', 'individual' ou 'total'
   
-  // J'initialise le tri par défaut en fonction du statut de la page active
+  const [avgHours, setAvgHours] = useState('')
+  const [avgMinutes, setAvgMinutes] = useState('')
+  
+  const [totalHours, setTotalHours] = useState('')
+  const [totalMinutes, setTotalMinutes] = useState('')
+  
+  const [individualRuntimes, setIndividualRuntimes] = useState([]) // Tableau d'objets { h: '', m: '' }
+
+  const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState(status === 'Watched' ? 'personal_rating_desc' : 'rating_desc')
 
   const navigate = useNavigate()
@@ -34,7 +45,6 @@ export default function DramaList({ session, status }) {
   }, [session, status]) 
 
   useEffect(() => {
-    // Je force la réinitialisation du tri par défaut lors de la navigation entre les onglets
     setSortBy(status === 'Watched' ? 'personal_rating_desc' : 'rating_desc')
     fetchDramas()
   }, [status])
@@ -139,6 +149,95 @@ export default function DramaList({ session, status }) {
     }
   }
 
+  // --- Logique d'ouverture et de sauvegarde de la modale ---
+  const openRuntimeModal = (drama, e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setRuntimeDrama(drama)
+    setRuntimeMode('average')
+    
+    const baseDuration = drama.episode_run_time || 0
+    // Conversion des minutes totales en Heures/Minutes pour l'affichage initial
+    const h = baseDuration >= 60 ? Math.floor(baseDuration / 60).toString() : ''
+    const m = baseDuration > 0 ? (baseDuration % 60).toString() : ''
+
+    setAvgHours(h)
+    setAvgMinutes(m)
+    setTotalHours('')
+    setTotalMinutes('')
+    
+    // Prépare un tableau avec autant de cases que d'épisodes contenant les valeurs {h, m}
+    const episodesCount = drama.number_of_episodes || 1
+    setIndividualRuntimes(Array(episodesCount).fill({ h, m }))
+    
+    setRuntimeModalOpen(true)
+  }
+
+  const closeRuntimeModal = () => {
+    setRuntimeModalOpen(false)
+    setRuntimeDrama(null)
+  }
+
+  const handleIndividualChange = (index, field, value) => {
+    const newRuntimes = [...individualRuntimes]
+    newRuntimes[index] = { ...newRuntimes[index], [field]: value }
+    setIndividualRuntimes(newRuntimes)
+  }
+
+  const handleSaveRuntime = async () => {
+    if (!runtimeDrama) return
+
+    let calculatedRuntime = 0
+    const episodesCount = runtimeDrama.number_of_episodes || 1
+
+    if (runtimeMode === 'average') {
+      const h = parseInt(avgHours, 10) || 0
+      const m = parseInt(avgMinutes, 10) || 0
+      calculatedRuntime = (h * 60) + m
+    } else if (runtimeMode === 'individual') {
+      const totalMins = individualRuntimes.reduce((acc, val) => {
+        const h = parseInt(val.h, 10) || 0
+        const m = parseInt(val.m, 10) || 0
+        return acc + (h * 60) + m
+      }, 0)
+      calculatedRuntime = totalMins > 0 ? Math.round(totalMins / episodesCount) : 0
+    } else {
+      const hours = parseInt(totalHours, 10) || 0
+      const minutes = parseInt(totalMinutes, 10) || 0
+      const totalMins = (hours * 60) + minutes
+      calculatedRuntime = Math.round(totalMins / episodesCount)
+    }
+
+    if (isNaN(calculatedRuntime) || calculatedRuntime <= 0) {
+      alert("Veuillez entrer une durée valide.")
+      return
+    }
+
+    const { error } = await supabase
+      .from('dramas')
+      .update({ episode_run_time: calculatedRuntime })
+      .eq('id', runtimeDrama.id)
+
+    if (error) {
+      alert("Erreur lors de la mise à jour : " + error.message)
+    } else {
+      closeRuntimeModal()
+      fetchDramas()
+    }
+  }
+
+  const getDurationText = (episodes, runTime) => {
+    if (!episodes) return null;
+    if (!runTime) return `${episodes} épisode${episodes > 1 ? 's' : ''}`;
+    
+    const totalMinutes = episodes * runTime;
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const durationStr = `${hours > 0 ? `${hours}h ` : ''}${minutes > 0 ? `${minutes}m` : ''}`.trim();
+    
+    return `${episodes} ép. • ${durationStr}`;
+  };
+
   const processedDramas = dramas
     .filter((drama) => {
       if (!searchQuery) return true
@@ -219,15 +318,31 @@ export default function DramaList({ session, status }) {
                 <h4 className="drama-title" title={drama.title}>{drama.title}</h4>
                 <div className="drama-genres">{drama.genre || 'Aucun genre spécifié'}</div>
                 
+                {drama.number_of_episodes && (
+                  <div 
+                    onClick={(e) => e.stopPropagation()} 
+                    style={{ fontSize: '0.85rem', color: '#a0a0a0', marginTop: '0.25rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}
+                  >
+                    ⏳ {getDurationText(drama.number_of_episodes, drama.episode_run_time)}
+                    
+                    <button 
+                      onClick={(e) => openRuntimeModal(drama, e)}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--primary-color)', cursor: 'pointer', fontSize: '0.75rem', padding: '0', textDecoration: 'underline', opacity: 0.8 }}
+                    >
+                      {drama.episode_run_time ? '(Éditer)' : '+ Ajouter durée'}
+                    </button>
+                  </div>
+                )}
+                
                 <div className="drama-ratings">
                   <span title="Note TMDB">TMDB : <span className="rating-badge">{drama.site_rating || '-'}</span></span>
                   <span title="Note VoirDrama">VD : <span className="rating-badge">{drama.voirdrama_rating || '-'}</span></span>
                 </div>
 
                 {status === 'Watched' && drama.personal_rating && (
-                  <div className="panel-card" style={{ marginTop: '1rem', borderLeft: '4px solid var(--primary-color)' }}>
+                  <div className="panel-card" style={{ marginTop: '1rem', borderLeft: '4px solid var(--primary-color)', padding: '1rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <span className="panel-label">Ma Note</span>
+                      <span className="panel-label" style={{ margin: 0 }}>Ma Note</span>
                       <strong style={{ color: 'var(--primary-color)', fontSize: '1.1rem' }}>{drama.personal_rating} / 5</strong>
                     </div>
                     {drama.comment && (
@@ -280,7 +395,7 @@ export default function DramaList({ session, status }) {
 
                   <button 
                     onClick={(e) => handleDelete(drama.id, e)}
-                    style={{ marginTop: '0.5rem', backgroundColor: 'transparent', border: '1px solid #d32f2f', color: '#d32f2f', padding: '0.5rem', fontSize: '0.9rem', width: '100%' }}
+                    style={{ marginTop: '0.5rem', backgroundColor: 'transparent', border: '1px solid #d32f2f', color: '#d32f2f', padding: '0.5rem', fontSize: '0.9rem', width: '100%', borderRadius: '8px', cursor: 'pointer' }}
                   >
                     Supprimer de la liste
                   </button>
@@ -290,6 +405,160 @@ export default function DramaList({ session, status }) {
           ))}
         </div>
       )}
+
+      {/* --- Boîte Modale (Apparaît au-dessus du reste) --- */}
+      {runtimeModalOpen && runtimeDrama && (
+        <div 
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)', zIndex: 1000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(5px)'
+          }} 
+          onClick={closeRuntimeModal}
+        >
+          <div 
+            style={{
+              background: 'var(--surface)', padding: '2rem', borderRadius: '24px',
+              border: '1px solid var(--border-color)', width: '90%', maxWidth: '500px',
+              boxShadow: '0 24px 80px rgba(0, 0, 0, 0.5)'
+            }} 
+            onClick={e => e.stopPropagation()} 
+          >
+            <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--primary-color)' }}>Modifier la durée</h3>
+            <p style={{ margin: '0 0 1.5rem 0', color: 'var(--secondary-text)', fontSize: '0.9rem' }}>{runtimeDrama.title}</p>
+            
+            <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '1rem', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+                <input 
+                  type="radio" 
+                  checked={runtimeMode === 'average'} 
+                  onChange={() => setRuntimeMode('average')} 
+                  style={{ width: 'auto', boxShadow: 'none' }}
+                />
+                Moyenne
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+                <input 
+                  type="radio" 
+                  checked={runtimeMode === 'individual'} 
+                  onChange={() => setRuntimeMode('individual')} 
+                  style={{ width: 'auto', boxShadow: 'none' }}
+                />
+                Individuel
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+                <input 
+                  type="radio" 
+                  checked={runtimeMode === 'total'} 
+                  onChange={() => setRuntimeMode('total')} 
+                  style={{ width: 'auto', boxShadow: 'none' }}
+                />
+                Total
+              </label>
+            </div>
+
+            {/* --- Mode Moyenne --- */}
+            {runtimeMode === 'average' && (
+              <div style={{ marginBottom: '2rem' }}>
+                <label className="panel-label">Durée moyenne d'un épisode</label>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <div style={{ flex: 1 }}>
+                    <input 
+                      type="number" 
+                      className="input-field" 
+                      value={avgHours} 
+                      onChange={e => setAvgHours(e.target.value)} 
+                      placeholder="Heures" 
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <input 
+                      type="number" 
+                      className="input-field" 
+                      value={avgMinutes} 
+                      onChange={e => setAvgMinutes(e.target.value)} 
+                      placeholder="Minutes" 
+                    />
+                  </div>
+                </div>
+                <p style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.75rem', fontStyle: 'italic' }}>
+                  S'appliquera uniformément aux {runtimeDrama.number_of_episodes || 1} épisodes.
+                </p>
+              </div>
+            )}
+
+            {/* --- Mode Individuel --- */}
+            {runtimeMode === 'individual' && (
+              <div style={{ marginBottom: '2rem' }}>
+                <label className="panel-label" style={{ marginBottom: '0.5rem' }}>Durée de chaque épisode</label>
+                <div style={{ maxHeight: '250px', overflowY: 'auto', paddingRight: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {individualRuntimes.map((duration, index) => (
+                    <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#ccc', width: '45px' }}>Ép. {index + 1}</span>
+                      <input 
+                        type="number" 
+                        className="input-field" 
+                        style={{ padding: '0.4rem', fontSize: '0.9rem', flex: 1 }} 
+                        value={duration.h} 
+                        onChange={e => handleIndividualChange(index, 'h', e.target.value)} 
+                        placeholder="Heures"
+                      />
+                      <input 
+                        type="number" 
+                        className="input-field" 
+                        style={{ padding: '0.4rem', fontSize: '0.9rem', flex: 1 }} 
+                        value={duration.m} 
+                        onChange={e => handleIndividualChange(index, 'm', e.target.value)} 
+                        placeholder="Minutes"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* --- Mode Total --- */}
+            {runtimeMode === 'total' && (
+              <div style={{ marginBottom: '2rem' }}>
+                <label className="panel-label">Durée totale de la série</label>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <div style={{ flex: 1 }}>
+                    <input 
+                      type="number" 
+                      className="input-field" 
+                      value={totalHours} 
+                      onChange={e => setTotalHours(e.target.value)} 
+                      placeholder="Heures" 
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <input 
+                      type="number" 
+                      className="input-field" 
+                      value={totalMinutes} 
+                      onChange={e => setTotalMinutes(e.target.value)} 
+                      placeholder="Minutes" 
+                    />
+                  </div>
+                </div>
+                <p style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.75rem', fontStyle: 'italic' }}>
+                  Sera divisé par les {runtimeDrama.number_of_episodes || 1} épisodes pour calculer la moyenne.
+                </p>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button className="primary-btn" onClick={handleSaveRuntime} style={{ flex: 1 }}>
+                Enregistrer
+              </button>
+              <button className="secondary-btn" onClick={closeRuntimeModal} style={{ flex: 1 }}>
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
