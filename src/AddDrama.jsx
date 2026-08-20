@@ -4,6 +4,8 @@ import { translateLongText } from './translationService'
 
 export default function AddDrama({ session }) {
   const [searchQuery, setSearchQuery] = useState('')
+  // Nouvel état pour le mode de recherche (Titre ou Acteur)
+  const [searchMode, setSearchMode] = useState('title') 
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
   const [isTranslating, setIsTranslating] = useState(false)
@@ -98,6 +100,7 @@ export default function AddDrama({ session }) {
     fetchGenres()
   }, [])
 
+  // J'ai ajouté searchMode dans les dépendances pour relancer la recherche si on change de mode
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       if (searchQuery.trim() !== '') {
@@ -108,34 +111,75 @@ export default function AddDrama({ session }) {
     }, 500)
 
     return () => clearTimeout(delayDebounceFn)
-  }, [searchQuery])
+  }, [searchQuery, searchMode])
 
   const executeSearch = async (query) => {
     setIsSearching(true)
     const apiKey = import.meta.env.VITE_TMDB_API_KEY
     
     try {
-      const [responseFr, responseEn] = await Promise.all([
-        fetch(`https://api.themoviedb.org/3/search/tv?query=${encodeURIComponent(query)}&language=fr-FR&api_key=${apiKey}`),
-        fetch(`https://api.themoviedb.org/3/search/tv?query=${encodeURIComponent(query)}&language=en-US&api_key=${apiKey}`)
-      ])
-      
-      const dataFr = await responseFr.json()
-      const dataEn = await responseEn.json()
-      
-      const mergedResults = (dataFr.results || []).map(frItem => {
-        const enItem = (dataEn.results || []).find(item => item.id === frItem.id)
-        const isAsian = ['zh', 'ko', 'ja', 'th'].includes(frItem.original_language)
-        const isUntranslated = isAsian && frItem.name === frItem.original_name
-        const displayName = isUntranslated && enItem ? enItem.name : frItem.name
+      if (searchMode === 'title') {
+        // --- RECHERCHE PAR TITRE ---
+        const [responseFr, responseEn] = await Promise.all([
+          fetch(`https://api.themoviedb.org/3/search/tv?query=${encodeURIComponent(query)}&language=fr-FR&api_key=${apiKey}`),
+          fetch(`https://api.themoviedb.org/3/search/tv?query=${encodeURIComponent(query)}&language=en-US&api_key=${apiKey}`)
+        ])
         
-        return {
-          ...frItem,
-          displayName: displayName
+        const dataFr = await responseFr.json()
+        const dataEn = await responseEn.json()
+        
+        const mergedResults = (dataFr.results || []).map(frItem => {
+          const enItem = (dataEn.results || []).find(item => item.id === frItem.id)
+          const isAsian = ['zh', 'ko', 'ja', 'th'].includes(frItem.original_language)
+          const isUntranslated = isAsian && frItem.name === frItem.original_name
+          const displayName = isUntranslated && enItem ? enItem.name : frItem.name
+          
+          return {
+            ...frItem,
+            displayName: displayName
+          }
+        })
+        
+        setSearchResults(mergedResults)
+      } 
+      else if (searchMode === 'actor') {
+        // --- RECHERCHE PAR ACTEUR ---
+        // On utilise en-US pour la recherche de nom, c'est souvent plus précis pour le Pinyin
+        const personResponse = await fetch(`https://api.themoviedb.org/3/search/person?query=${encodeURIComponent(query)}&language=en-US&api_key=${apiKey}`)
+        const personData = await personResponse.json()
+
+        if (personData.results && personData.results.length > 0) {
+          let allDramas = [];
+
+          // On boucle sur les 3 premiers résultats pour éviter de tomber sur un homonyme sans séries
+          for (let i = 0; i < Math.min(3, personData.results.length); i++) {
+            const actorId = personData.results[i].id;
+
+            // On va chercher la filmographie de cette personne
+            const creditsResponse = await fetch(`https://api.themoviedb.org/3/person/${actorId}/tv_credits?language=fr-FR&api_key=${apiKey}`);
+            const creditsData = await creditsResponse.json();
+
+            // Si cette personne a des rôles à la TV, on les garde et on arrête de chercher !
+            if (creditsData.cast && creditsData.cast.length > 0) {
+              allDramas = creditsData.cast.map(item => ({
+                ...item,
+                displayName: item.name || item.original_name
+              }));
+              break; 
+            }
+          }
+
+          // Filtre anti-doublon (si l'acteur a 2 rôles dans le même drama, TMDB le renvoie 2 fois)
+          const uniqueDramas = Array.from(new Map(allDramas.map(item => [item.id, item])).values());
+
+          // Trier par popularité pour que les plus gros succès soient en haut
+          uniqueDramas.sort((a, b) => b.popularity - a.popularity);
+
+          setSearchResults(uniqueDramas);
+        } else {
+          setSearchResults([]);
         }
-      })
-      
-      setSearchResults(mergedResults)
+      }
     } catch (error) {
       console.error("Erreur lors de la recherche", error)
     } finally {
@@ -389,13 +433,29 @@ export default function AddDrama({ session }) {
       <h2 style={{ marginTop: 0, marginBottom: '0.5rem' }}>Ajouter une nouvelle série</h2>
       
       <div style={{ marginBottom: '1rem', paddingBottom: '0.8rem', borderBottom: '1px solid var(--border-color)' }}>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          
+          {/* Nouveau menu déroulant pour le choix de la recherche */}
+          <select 
+            value={searchMode} 
+            onChange={(e) => setSearchMode(e.target.value)}
+            className="status-select"
+            style={{ padding: '0.5rem', borderRadius: '8px' }}
+          >
+            <option value="title">Titre</option>
+            <option value="actor">Acteur/Actrice</option>
+          </select>
+
+          {/* L'input ajusté pour prendre le reste de l'espace */}
           <input 
             type="text" 
-            placeholder="Rechercher un drama avec TMDB" 
+            placeholder={searchMode === 'title' ? "Rechercher un drama avec TMDB..." : "Rechercher un(e) acteur/actrice..."} 
             value={searchQuery} 
             onChange={(e) => setSearchQuery(e.target.value)} 
+            style={{ flex: 1, minWidth: '200px' }}
+            className="input-field"
           />
+          
           {isSearching && !isTranslating && <span style={{ fontSize: '0.9rem', color: '#c7d0ff', whiteSpace: 'nowrap' }}>Recherche...</span>}
           {isTranslating && <span style={{ fontSize: '0.9rem', color: 'var(--secondary-text)', whiteSpace: 'nowrap' }}>Traduction en cours... {translationProgress}%</span>}
         </div>

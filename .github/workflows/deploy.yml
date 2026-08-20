@@ -39,12 +39,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Je compile mon application en injectant uniquement mes variables d'environnement secrètes disponibles
+      # Je génère physiquement le fichier d'environnement pour garantir sa lecture par Vite lors de la compilation
+      - name: Create env file
+        run: |
+          echo "VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}" >> .env
+          echo "VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}" >> .env
+          echo "VITE_TMDB_API_KEY=${{ secrets.VITE_TMDB_API_KEY }}" >> .env
+
+      # Je lance la compilation de mon application, Vite détectera automatiquement le fichier généré
       - name: Build application
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-          VITE_TMDB_API_KEY: ${{ secrets.VITE_TMDB_API_KEY }}
         run: npm run build
 
       # Je prépare l'infrastructure GitHub Pages pour recevoir la publication
