@@ -6,7 +6,7 @@ export default function DramaList({ session, status }) {
   const [dramas, setDramas] = useState([])
   const [loading, setLoading] = useState(true)
   
-  // État pour stocker les titres TMDB récupérés dynamiquement { [dramaId]: { original, english } }
+  // État pour stocker les titres dynamiques TMDB { [dramaId]: { original, english, french } }
   const [tmdbTitlesMap, setTmdbTitlesMap] = useState({})
 
   const [reviewingId, setReviewingId] = useState(null)
@@ -16,15 +16,13 @@ export default function DramaList({ session, status }) {
   // --- États pour la boîte modale de durée ---
   const [runtimeModalOpen, setRuntimeModalOpen] = useState(false)
   const [runtimeDrama, setRuntimeDrama] = useState(null)
-  const [runtimeMode, setRuntimeMode] = useState('average')
+  const [runtimeMode, setRuntimeMode] = useState('average') // 'average', 'individual' ou 'total'
   
   const [avgHours, setAvgHours] = useState('')
   const [avgMinutes, setAvgMinutes] = useState('')
-  
   const [totalHours, setTotalHours] = useState('')
   const [totalMinutes, setTotalMinutes] = useState('')
-  
-  const [individualRuntimes, setIndividualRuntimes] = useState([])
+  const [individualRuntimes, setIndividualRuntimes] = useState([]) 
 
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState(status === 'Watched' ? 'personal_rating_desc' : 'rating_desc')
@@ -52,15 +50,17 @@ export default function DramaList({ session, status }) {
     if (error) {
       console.error("Erreur lors de la récupération des séries :", error)
       setDramas([])
-      setLoading(false)
     } else {
       const dramasList = data || []
       setDramas(dramasList)
-      setLoading(false)
+      // On lance la récupération TMDB en arrière-plan pour les titres
       fetchTmdbTitlesAsync(dramasList)
     }
+    
+    setLoading(false)
   }
 
+  // --- Fonction pour interroger TMDB et récupérer les 3 titres ---
   const fetchTmdbTitlesAsync = async (dramasArray) => {
     const apiKey = import.meta.env.VITE_TMDB_API_KEY
     if (!apiKey) return
@@ -91,19 +91,14 @@ export default function DramaList({ session, status }) {
 
           titlesMap[drama.id] = {
             original: dataFr.original_name || drama.title,
-            english: dataEn.name || dataEn.original_name || drama.title
+            english: dataEn.name || dataEn.original_name || drama.title,
+            french: dataFr.name || drama.title
           }
         } else {
-          titlesMap[drama.id] = {
-            original: drama.title,
-            english: drama.title
-          }
+          titlesMap[drama.id] = { original: drama.title, english: drama.title, french: drama.title }
         }
       } catch (err) {
-        titlesMap[drama.id] = {
-          original: drama.title,
-          english: drama.title
-        }
+        titlesMap[drama.id] = { original: drama.title, english: drama.title, french: drama.title }
       }
     }
 
@@ -187,6 +182,7 @@ export default function DramaList({ session, status }) {
     }
   }
 
+  // --- Logique d'ouverture et de sauvegarde de la modale ---
   const openRuntimeModal = (drama, e) => {
     e.preventDefault()
     e.stopPropagation()
@@ -278,9 +274,10 @@ export default function DramaList({ session, status }) {
       if (!searchQuery) return true
       const titles = tmdbTitlesMap[drama.id]
       const query = searchQuery.toLowerCase()
-      return drama.title.toLowerCase().includes(query) || 
+      return (drama.title && drama.title.toLowerCase().includes(query)) || 
              (titles?.original && titles.original.toLowerCase().includes(query)) ||
-             (titles?.english && titles.english.toLowerCase().includes(query))
+             (titles?.english && titles.english.toLowerCase().includes(query)) ||
+             (titles?.french && titles.french.toLowerCase().includes(query))
     })
     .sort((a, b) => {
       if (sortBy === 'date_desc') return new Date(b.created_at) - new Date(a.created_at)
@@ -330,14 +327,15 @@ export default function DramaList({ session, status }) {
       ) : (
         <div className="drama-grid">
           {processedDramas.map((drama) => {
-            const titles = tmdbTitlesMap[drama.id] || { original: drama.title, english: drama.title }
-            const originalTitle = titles.original
+            const titles = tmdbTitlesMap[drama.id] || { original: drama.title, english: drama.title, french: drama.title }
             const englishTitle = titles.english
+            const originalTitle = titles.original
+            const frenchTitle = titles.french
 
             return (
               <Link 
                 key={drama.id} 
-                to={`/drama/${createSlug(englishTitle)}`}
+                to={`/drama/${createSlug(drama.title)}`}
                 className="drama-card" 
                 style={{ textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column' }}
               >
@@ -355,9 +353,15 @@ export default function DramaList({ session, status }) {
                     {englishTitle}
                   </h4>
                   
-                  <div style={{ fontSize: '0.85rem', color: '#a0a0a0', fontStyle: 'italic', marginBottom: '0.5rem' }}>
+                  <div style={{ fontSize: '0.85rem', color: '#a0a0a0', fontStyle: 'italic', marginBottom: '0.1rem' }}>
                     {originalTitle}
                   </div>
+                  
+                  {frenchTitle && frenchTitle !== englishTitle && frenchTitle !== originalTitle && (
+                    <div style={{ fontSize: '0.75rem', color: '#777', marginBottom: '0.5rem' }}>
+                      {frenchTitle}
+                    </div>
+                  )}
 
                   <div className="drama-genres" style={{ marginTop: '0.5rem' }}>{drama.genre || 'Aucun genre spécifié'}</div>
                   
@@ -429,7 +433,7 @@ export default function DramaList({ session, status }) {
                         className="status-select"
                         style={{ marginTop: '1rem' }}
                       >
-                        <option value="Not Found">Vidéos introuvables</option>
+                        <option value="Not Found">Streaming Introuvable</option>
                         <option value="To Watch">À voir</option>
                         <option value="Watching">En cours</option>
                         <option value="Watched">Vu</option>
@@ -524,6 +528,9 @@ export default function DramaList({ session, status }) {
                     />
                   </div>
                 </div>
+                <p style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.75rem', fontStyle: 'italic' }}>
+                  S'appliquera uniformément aux {runtimeDrama.number_of_episodes || 1} épisodes.
+                </p>
               </div>
             )}
 
@@ -579,6 +586,9 @@ export default function DramaList({ session, status }) {
                     />
                   </div>
                 </div>
+                <p style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.75rem', fontStyle: 'italic' }}>
+                  Sera divisé par les {runtimeDrama.number_of_episodes || 1} épisodes pour calculer la moyenne.
+                </p>
               </div>
             )}
 
