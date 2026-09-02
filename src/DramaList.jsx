@@ -303,12 +303,12 @@ export default function DramaList({ session, status }) {
 
       <div className="drama-grid">
         {processedDramas.map((drama) => {
-          const tmdbInfo = tmdbDataMap[drama.id] || { original: drama.title, english: drama.title, french: drama.title, status: drama.tmdb_status }
-          const englishTitle = tmdbInfo.english
-          const originalTitle = tmdbInfo.original
-          const frenchTitle = tmdbInfo.french
-          
-          const isEnded = ['Ended', 'Canceled', 'Terminée', 'Annulée'].includes(tmdbInfo.status);
+          const tmdbInfo = tmdbDataMap[drama.id]
+          const isLoadingStatus = !tmdbInfo
+          const englishTitle = tmdbInfo?.english || drama.title
+          const originalTitle = tmdbInfo?.original || drama.title
+          const frenchTitle = tmdbInfo?.french || drama.title
+          const isEnded = tmdbInfo ? ['Ended', 'Canceled', 'Terminée', 'Annulée'].includes(tmdbInfo.status) : false
 
           return (
             <Link 
@@ -327,10 +327,14 @@ export default function DramaList({ session, status }) {
                 
                 <div 
                   className="card-action-btn card-action-left" 
-                  title={isEnded ? "Série terminée" : "En cours de production"}
+                  title={isLoadingStatus ? "Chargement du statut..." : (isEnded ? "Série terminée" : "En cours de production")}
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                 >
-                  {isEnded ? (
+                  {isLoadingStatus ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                    </svg>
+                  ) : isEnded ? (
                     <svg width="23" height="15" viewBox="0 0 23 15" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path d="M15.8565 6.36375L13.2315 8.98875L16.9703 12.7275L14.8493 14.8492L11.1105 11.1105L7.371 14.8492L5.25 12.7282L8.98875 8.9895L6.36375 6.3645L4.24275 8.4855L0 4.24275L4.24275 0L11.1105 6.86775L17.9783 0L22.221 4.24275L17.9783 8.4855L15.8565 6.36375Z" fill="currentColor"/>
                     </svg>

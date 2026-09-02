@@ -7,7 +7,6 @@ import AddDrama from './AddDrama'
 import Profile from './Profile'
 import DramaList from './DramaList'
 import DramaDetail from './DramaDetail'
-import DramaActeur from './DramaActeur'
 import TmdbPreview from './TmdbPreview'
 
 export default function App() {
@@ -159,7 +158,6 @@ export default function App() {
           <Route path="/Add" element={<AddDrama session={session} />} />
           <Route path="/Profil" element={<Profile session={session} />} />
           <Route path="/drama/:slug" element={<DramaDetail />} />
-          <Route path="/actor/:slug" element={<DramaActeur />} />
           <Route path="/preview/:slug" element={<TmdbPreview session={session} />} />
           <Route path="/NotFound" element={<DramaList session={session} status="Not Found" />} />
         </Routes>
