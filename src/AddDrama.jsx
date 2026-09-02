@@ -392,7 +392,7 @@ export default function AddDrama({ session }) {
                     </div>
 
                     <div style={{ fontSize: '0.78rem', color: '#c7d0ff', fontStyle: 'italic', opacity: 0.9 }}>
-                      FR : {frTitle && frTitle !== enTitle ? frTitle : `${englishTitle}`}
+                      FR : {frTitle && frTitle !== enTitle ? frTitle : 'Titre identique'}
                     </div>
 
                     <div className="drama-genres" style={{ color: 'var(--primary-color)', fontWeight: '600', fontSize: '0.8rem' }}>
