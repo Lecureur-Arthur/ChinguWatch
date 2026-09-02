@@ -291,8 +291,8 @@ export default function AddDrama({ session }) {
               const year = result.first_air_date ? result.first_air_date.substring(0, 4) : '????';
               const frTitle = result.name;
               const enTitle = result.displayName;
-              const isEnded = result.tmdb_status === 'Ended' || result.tmdb_status === 'Canceled';
-
+              const isEnded = ['Ended', 'Canceled', 'Terminée', 'Annulée'].includes(result.tmdb_status);
+              
               return (
                 <div 
                   key={result.id} 

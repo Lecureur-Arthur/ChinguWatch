@@ -264,14 +264,14 @@ export default function DramaList({ session, status }) {
       if (sortBy === 'date_asc') return new Date(a.created_at) - new Date(b.created_at)
       
       if (sortBy === 'status_ended') {
-        const endedA = infoA.status === 'Ended' || infoA.status === 'Canceled' ? 1 : 0
-        const endedB = infoB.status === 'Ended' || infoB.status === 'Canceled' ? 1 : 0
-        return endedB - endedA
+        const endedA = ['Ended', 'Canceled', 'Terminée', 'Annulée'].includes(infoA.status) ? 1 : 0;
+        const endedB = ['Ended', 'Canceled', 'Terminée', 'Annulée'].includes(infoB.status) ? 1 : 0;
+        return endedB - endedA;
       }
       if (sortBy === 'status_ongoing') {
-        const ongoingA = infoA.status === 'Returning Series' || infoA.status === 'In Production' ? 1 : 0
-        const ongoingB = infoB.status === 'Returning Series' || infoB.status === 'In Production' ? 1 : 0
-        return ongoingB - ongoingA
+        const ongoingA = ['Returning Series', 'In Production', 'De retour', 'En production', 'Pilot', 'Pilote'].includes(infoA.status) ? 1 : 0;
+        const ongoingB = ['Returning Series', 'In Production', 'De retour', 'En production', 'Pilot', 'Pilote'].includes(infoB.status) ? 1 : 0;
+        return ongoingB - ongoingA;
       }
 
       if (sortBy === 'personal_rating_desc') return (b.personal_rating || 0) - (a.personal_rating || 0)
@@ -308,7 +308,7 @@ export default function DramaList({ session, status }) {
           const originalTitle = tmdbInfo.original
           const frenchTitle = tmdbInfo.french
           
-          const isEnded = tmdbInfo.status === 'Ended' || tmdbInfo.status === 'Canceled';
+          const isEnded = ['Ended', 'Canceled', 'Terminée', 'Annulée'].includes(tmdbInfo.status);
 
           return (
             <Link 
