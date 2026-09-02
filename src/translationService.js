@@ -102,7 +102,8 @@ const translateWithAlternative = async (chunk) => {
 
 const translateWithGoogle = async (chunk) => {
   try {
-    const response = await fetch(`${GOOGLE_TRANSLATE_ENDPOINT}&sl=en&tl=fr&dt=t&q=${encodeURIComponent(chunk)}`)
+    // On passe de sl=en à sl=auto pour que Google détecte le Chinois/Coréen/Anglais automatiquement
+    const response = await fetch(`${GOOGLE_TRANSLATE_ENDPOINT}&sl=auto&tl=fr&dt=t&q=${encodeURIComponent(chunk)}`)
     if (!response.ok) return null
     const data = await response.json()
     if (Array.isArray(data) && data[0]) {
