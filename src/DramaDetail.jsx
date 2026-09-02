@@ -965,7 +965,8 @@ export default function DramaDetail() {
                     }
 
                     // --- VÉRIFICATION DU STATUT DE LA SÉRIE ---
-                    const isEnded = credit.status === 'Ended' || credit.status === 'Canceled' || credit.tmdb_status === 'Ended' || credit.tmdb_status === 'Canceled';
+                    const isEnded = ['Ended', 'Canceled', 'Terminée', 'Annulée'].includes(credit.status) || 
+                                    ['Ended', 'Canceled', 'Terminée', 'Annulée'].includes(credit.tmdb_status);
 
                     return (
                       <a 
