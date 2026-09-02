@@ -128,33 +128,30 @@ export default function DramaDetail() {
   // --- VERIFICATION DES ACTEURS "DÉJÀ VUS" ---
   useEffect(() => {
     const findSeenActors = async () => {
+      // On s'assure d'avoir la liste des acteurs de la page actuelle ET le catalogue de l'utilisateur
       if (!tmdbData?.credits?.cast || !userDramas || userDramas.length === 0) return;
 
+      // On récupère uniquement les ID TMDB des séries marquées comme "Vu"
       const watchedTmdbIds = userDramas
         .filter(d => d.status === 'Watched' && d.tmdb_id)
         .map(d => d.tmdb_id);
 
       if (watchedTmdbIds.length === 0) return;
 
-      const currentDramaId = tmdbData.id;
       const apiKey = import.meta.env.VITE_TMDB_API_KEY;
       const castToCheck = tmdbData.credits.cast.slice(0, 16);
-      
       const seenSet = new Set();
 
-      if (watchedTmdbIds.includes(currentDramaId)) {
-        castToCheck.forEach(actor => seenSet.add(actor.id));
-        setSeenActors(seenSet);
-        return;
-      }
-
+      // On vérifie CHAQUE acteur de la série affichée (même si la série n'est pas dans le catalogue)
       await Promise.all(
         castToCheck.map(async (actor) => {
           try {
+            // On récupère la filmographie TV de l'acteur
             const res = await fetch(`https://api.themoviedb.org/3/person/${actor.id}/tv_credits?api_key=${apiKey}`);
             const data = await res.json();
             
             if (data.cast) {
+              // Si l'acteur a joué dans au moins UNE série présente dans "watchedTmdbIds", on le marque comme vu
               const hasSeen = data.cast.some(credit => watchedTmdbIds.includes(credit.id));
               if (hasSeen) {
                 seenSet.add(actor.id);
@@ -166,6 +163,7 @@ export default function DramaDetail() {
         })
       );
 
+      // On met à jour l'état, ce qui déclenchera l'affichage des badges verts
       setSeenActors(seenSet);
     };
 
@@ -227,39 +225,39 @@ export default function DramaDetail() {
 
   const fetchDramaDetails = async () => {
     setLoading(true)
-
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setLoading(false)
-      return
-    }
+    if (!user) { setLoading(false); return }
 
+    // CORRECTION : On récupère TOUJOURS la liste de tes séries, même en mode preview
+    const { data: allDramas } = await supabase.from('dramas').select('*').eq('user_id', user.id)
+    setUserDramas(allDramas || [])
+
+    const apiKey = import.meta.env.VITE_TMDB_API_KEY
+
+    // ---------- MODE PREVIEW ----------
     if (slug.startsWith('preview-')) {
       setPreviewMode(true)
       const tmdbId = slug.replace('preview-', '')
-      const apiKey = import.meta.env.VITE_TMDB_API_KEY
-      
       try {
         const [detailResFr, detailResEn] = await Promise.all([
           fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?language=fr-FR&append_to_response=credits,watch/providers&api_key=${apiKey}`),
           fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?language=en-US&append_to_response=credits,watch/providers&api_key=${apiKey}`)
         ])
-
         const detailDataFr = await detailResFr.json()
         const detailDataEn = await detailResEn.json()
         setTmdbData(detailDataFr)
 
-        const enName = detailDataEn.name || detailDataEn.original_name || 'Titre Inconnu'
-        const frName = detailDataFr.name || enName
-        const origName = detailDataFr.original_name || enName
+        const englishTitle = detailDataEn.name || detailDataEn.original_name || 'Titre Inconnu'
+        const originalTitle = detailDataFr.original_name || detailDataEn.original_name || englishTitle
+        const frenchTitle = detailDataFr.name || englishTitle
 
-        setEnglishTitle(enName)
-        setOriginalTitle(origName)
-        setFrenchTitle(frName)
+        setEnglishTitle(englishTitle)
+        setOriginalTitle(originalTitle)
+        setFrenchTitle(frenchTitle)
 
         setLocalDrama({
           id: 'preview',
-          title: enName,
+          title: englishTitle,
           poster_url: detailDataFr.poster_path ? `https://image.tmdb.org/t/p/w500${detailDataFr.poster_path}` : null,
           status: 'Not Added',
           personal_rating: null,
@@ -270,44 +268,23 @@ export default function DramaDetail() {
           tmdb_id: tmdbId
         })
 
+        // Synopsis natif : Français d'abord, sinon Anglais
         const frOverview = detailDataFr.overview
         const enOverview = detailDataEn.overview
-
-        if (frOverview && enOverview && frOverview.trim() === enOverview.trim()) {
-          setSynopsisLoading(true)
-          const translated = await translateLongText(enOverview, setSynopsisProgress)
-          setTmdbSynopsis(translated || enOverview)
-          setSynopsisLoading(false)
-        } else if (frOverview) {
+        if (frOverview && frOverview.trim() !== '') {
           setTmdbSynopsis(frOverview)
-        } else if (enOverview) {
-          setSynopsisLoading(true)
-          const translated = await translateLongText(enOverview, setSynopsisProgress)
-          setTmdbSynopsis(translated || enOverview)
-          setSynopsisLoading(false)
+        } else if (enOverview && enOverview.trim() !== '') {
+          setTmdbSynopsis(enOverview)
         } else {
           setTmdbSynopsis('Aucun synopsis disponible.')
         }
-
-      } catch (error) {
-        console.error("Erreur API TMDB Aperçu", error)
-      }
-
+      } catch (error) {}
       setLoading(false)
       return
     }
 
-    const { data: allDramas, error: dbError } = await supabase.from('dramas').select('*').eq('user_id', user.id)
-
-    if (dbError) {
-      console.error("Erreur de récupération locale", dbError)
-      setLoading(false)
-      return
-    }
-
-    setUserDramas(allDramas || [])
-
-    const dbData = allDramas.find(d => createSlug(d.title) === slug)
+    // ---------- MODE CATALOGUE ----------
+    const dbData = (allDramas || []).find(d => createSlug(d.title) === slug)
 
     if (!dbData) {
       setLocalDrama(null)
@@ -320,13 +297,10 @@ export default function DramaDetail() {
     setPersonalRating(dbData.personal_rating ?? '')
     setCommentText(dbData.comment ?? '')
     setVoirDramaRating(dbData.voirdrama_rating ?? '')
-    
     setEnglishTitle(dbData.title)
     setOriginalTitle(dbData.title)
 
-    const apiKey = import.meta.env.VITE_TMDB_API_KEY
     let tmdbId = dbData.tmdb_id || null
-
     try {
       if (!tmdbId) {
         const query = encodeURIComponent(dbData.title || '')
@@ -337,10 +311,8 @@ export default function DramaDetail() {
         const dataFr = await responseFr.json()
         const dataEn = await responseEn.json()
         const results = [...(dataFr.results || []), ...(dataEn.results || [])]
-        const normalizedTitle = dbData.title?.trim().toLowerCase()
-        const exactMatch = results.find((item) => [item.name, item.original_name].some((value) => value?.trim().toLowerCase() === normalizedTitle))
-        if (exactMatch) tmdbId = exactMatch.id
-        else tmdbId = results[0]?.id || null
+        const exactMatch = results.find((item) => [item.name, item.original_name].some((value) => value?.trim().toLowerCase() === dbData.title?.trim().toLowerCase()))
+        tmdbId = exactMatch ? exactMatch.id : results[0]?.id || null
       }
 
       if (tmdbId) {
@@ -348,38 +320,30 @@ export default function DramaDetail() {
           fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?language=fr-FR&append_to_response=credits,watch/providers&api_key=${apiKey}`),
           fetch(`https://api.themoviedb.org/3/tv/${tmdbId}?language=en-US&append_to_response=credits,watch/providers&api_key=${apiKey}`)
         ])
-
         const detailDataFr = await detailResFr.json()
         const detailDataEn = await detailResEn.json()
         setTmdbData(detailDataFr)
 
-        setOriginalTitle(detailDataFr.original_name || dbData.title)
-        setEnglishTitle(detailDataEn.name || detailDataEn.original_name || dbData.title)
-        setFrenchTitle(detailDataFr.name || dbData.title)
+        const englishTitle = detailDataEn.name || detailDataEn.original_name || dbData.title
+        const originalTitle = detailDataFr.original_name || detailDataEn.original_name || dbData.title
+        const frenchTitle = detailDataFr.name || englishTitle
 
+        setEnglishTitle(englishTitle)
+        setOriginalTitle(originalTitle)
+        setFrenchTitle(frenchTitle)
+
+        // Synopsis natif
         const frOverview = detailDataFr.overview
         const enOverview = detailDataEn.overview
-
-        if (frOverview && enOverview && frOverview.trim() === enOverview.trim()) {
-          setSynopsisLoading(true)
-          const translated = await translateLongText(enOverview, setSynopsisProgress)
-          setTmdbSynopsis(translated || enOverview)
-          setSynopsisLoading(false)
-        } else if (frOverview) {
+        if (frOverview && frOverview.trim() !== '') {
           setTmdbSynopsis(frOverview)
-        } else if (enOverview) {
-          setSynopsisLoading(true)
-          const translated = await translateLongText(enOverview, setSynopsisProgress)
-          setTmdbSynopsis(translated || enOverview)
-          setSynopsisLoading(false)
+        } else if (enOverview && enOverview.trim() !== '') {
+          setTmdbSynopsis(enOverview)
         } else {
           setTmdbSynopsis('Aucun synopsis disponible.')
         }
       }
-    } catch (error) {
-      console.error("Erreur API TMDB", error)
-    }
-
+    } catch (error) {}
     setLoading(false)
   }
 
