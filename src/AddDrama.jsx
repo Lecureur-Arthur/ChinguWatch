@@ -61,7 +61,6 @@ export default function AddDrama({ session }) {
     return title ? title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim() : ''
   }
 
-  // --- RECHERCHE MISE À JOUR (Exclusion des Animés) ---
   const executeSearch = async (query) => {
     setIsSearching(true)
     const apiKey = import.meta.env.VITE_TMDB_API_KEY
@@ -76,10 +75,7 @@ export default function AddDrama({ session }) {
         const dataFr = await responseFr.json()
         const dataEn = await responseEn.json()
         
-        // 1. FILTRE ANTI-ANIMÉ : On exclut toutes les séries ayant le genre 16 (Animation)
         const nonAnimatedResults = (dataFr.results || []).filter(item => !(item.genre_ids && item.genre_ids.includes(16)))
-
-        // On limite aux 12 premiers résultats (parmi les séries non-animées)
         const topResults = nonAnimatedResults.slice(0, 12)
 
         const detailedResults = await Promise.all(topResults.map(async (frItem) => {
@@ -95,6 +91,7 @@ export default function AddDrama({ session }) {
             ...frItem,
             number_of_seasons: detailData.number_of_seasons,
             number_of_episodes: detailData.number_of_episodes,
+            episode_run_time: (detailData.episode_run_time && detailData.episode_run_time.length > 0) ? detailData.episode_run_time[0] : 0,
             tmdb_status: detailData.status,
             displayName: displayName
           }
@@ -116,7 +113,6 @@ export default function AddDrama({ session }) {
 
             if (creditsData.cast && creditsData.cast.length > 0) {
               
-              // 2. FILTRE ANTI-ANIMÉ POUR LES ACTEURS (Exclure le doublage d'animes)
               const nonAnimatedCredits = creditsData.cast.filter(item => !(item.genre_ids && item.genre_ids.includes(16)))
 
               const topCredits = nonAnimatedCredits
@@ -131,6 +127,7 @@ export default function AddDrama({ session }) {
                   ...item,
                   number_of_seasons: detailData.number_of_seasons,
                   number_of_episodes: detailData.number_of_episodes,
+                  episode_run_time: (detailData.episode_run_time && detailData.episode_run_time.length > 0) ? detailData.episode_run_time[0] : 0,
                   tmdb_status: detailData.status,
                   displayName: item.name || item.original_name
                 }
@@ -188,6 +185,7 @@ export default function AddDrama({ session }) {
 
       const posterUrl = drama.poster_path ? `https://image.tmdb.org/t/p/w500${drama.poster_path}` : null
 
+      // ICI : L'objet sauvegardé contient bien les 3 informations capitales pour DramaList
       const newDrama = {
         user_id: user.id,
         title: title,
@@ -195,7 +193,9 @@ export default function AddDrama({ session }) {
         status: 'To Watch', 
         site_rating: drama.vote_average || null,
         tmdb_id: drama.id,
-        episode_run_time: 0
+        number_of_seasons: drama.number_of_seasons || null,
+        number_of_episodes: drama.number_of_episodes || null,
+        episode_run_time: drama.episode_run_time || 0
       }
 
       const { data, error } = await supabase.from('dramas').insert([newDrama]).select()

@@ -120,18 +120,16 @@ export default function DramaDetail() {
   }, [tmdbData])
 
   useEffect(() => {
-    setSelectedActor(null) // Ferme la modale si elle était ouverte
-    setPreviewMode(false)  // Réinitialise le mode aperçu
+    setSelectedActor(null)
+    setPreviewMode(false)
     fetchDramaDetails()
   }, [slug])
 
   // --- VERIFICATION DES ACTEURS "DÉJÀ VUS" ---
   useEffect(() => {
     const findSeenActors = async () => {
-      // On s'assure d'avoir la liste des acteurs de la page actuelle ET le catalogue de l'utilisateur
       if (!tmdbData?.credits?.cast || !userDramas || userDramas.length === 0) return;
 
-      // On récupère uniquement les ID TMDB des séries marquées comme "Vu"
       const watchedTmdbIds = userDramas
         .filter(d => d.status === 'Watched' && d.tmdb_id)
         .map(d => d.tmdb_id);
@@ -142,16 +140,13 @@ export default function DramaDetail() {
       const castToCheck = tmdbData.credits.cast.slice(0, 16);
       const seenSet = new Set();
 
-      // On vérifie CHAQUE acteur de la série affichée (même si la série n'est pas dans le catalogue)
       await Promise.all(
         castToCheck.map(async (actor) => {
           try {
-            // On récupère la filmographie TV de l'acteur
             const res = await fetch(`https://api.themoviedb.org/3/person/${actor.id}/tv_credits?api_key=${apiKey}`);
             const data = await res.json();
             
             if (data.cast) {
-              // Si l'acteur a joué dans au moins UNE série présente dans "watchedTmdbIds", on le marque comme vu
               const hasSeen = data.cast.some(credit => watchedTmdbIds.includes(credit.id));
               if (hasSeen) {
                 seenSet.add(actor.id);
@@ -163,7 +158,6 @@ export default function DramaDetail() {
         })
       );
 
-      // On met à jour l'état, ce qui déclenchera l'affichage des badges verts
       setSeenActors(seenSet);
     };
 
@@ -183,7 +177,10 @@ export default function DramaDetail() {
       status: 'To Watch', 
       site_rating: localDrama.site_rating,
       tmdb_id: localDrama.tmdb_id,
-      episode_run_time: localDrama.episode_run_time
+      episode_run_time: localDrama.episode_run_time,
+      number_of_seasons: localDrama.number_of_seasons || null,
+      number_of_episodes: localDrama.number_of_episodes || null,
+      synopsis: tmdbSynopsis
     }
 
     const { data, error } = await supabase.from('dramas').insert([newDrama]).select()
@@ -203,7 +200,7 @@ export default function DramaDetail() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const englishTitle = credit.name || credit.original_name;
+    const englishTitle = credit.title_en || credit.name;
     const newDrama = {
       user_id: user.id,
       title: englishTitle,
@@ -211,7 +208,10 @@ export default function DramaDetail() {
       status: 'To Watch',
       site_rating: credit.vote_average || null,
       tmdb_id: credit.id,
-      episode_run_time: 0
+      episode_run_time: 0,
+      number_of_seasons: credit.number_of_seasons || null,
+      number_of_episodes: credit.total_episodes || credit.number_of_episodes || null,
+      synopsis: credit.overview || ''
     };
 
     const { data, error } = await supabase.from('dramas').insert([newDrama]).select();
@@ -228,7 +228,6 @@ export default function DramaDetail() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
 
-    // CORRECTION : On récupère TOUJOURS la liste de tes séries, même en mode preview
     const { data: allDramas } = await supabase.from('dramas').select('*').eq('user_id', user.id)
     setUserDramas(allDramas || [])
 
@@ -265,10 +264,11 @@ export default function DramaDetail() {
           voirdrama_rating: null,
           comment: null,
           episode_run_time: (detailDataFr.episode_run_time && detailDataFr.episode_run_time.length > 0) ? detailDataFr.episode_run_time[0] : 0,
+          number_of_seasons: detailDataFr.number_of_seasons || null,
+          number_of_episodes: detailDataFr.number_of_episodes || null,
           tmdb_id: tmdbId
         })
 
-        // Synopsis natif : Français d'abord, sinon Anglais
         const frOverview = detailDataFr.overview
         const enOverview = detailDataEn.overview
         if (frOverview && frOverview.trim() !== '') {
@@ -332,7 +332,6 @@ export default function DramaDetail() {
         setOriginalTitle(originalTitle)
         setFrenchTitle(frenchTitle)
 
-        // Synopsis natif
         const frOverview = detailDataFr.overview
         const enOverview = detailDataEn.overview
         if (frOverview && frOverview.trim() !== '') {
@@ -403,7 +402,7 @@ export default function DramaDetail() {
                 ...credit, 
                 number_of_seasons: detailDataFr.number_of_seasons,
                 total_episodes: detailDataFr.number_of_episodes,
-                tmdb_status: detailDataFr.status, // On ajoute le statut pour les badges de la modale
+                tmdb_status: detailDataFr.status, 
                 title_en: enTitle,
                 title_orig: origTitle,
                 title_fr: frTitle || enTitle
@@ -416,10 +415,7 @@ export default function DramaDetail() {
 
         setActorCredits(creditsWithDetails);
       }
-    } catch (error) {
-      console.error("Erreur lors de la récupération des séries de l'acteur:", error)
-    }
-    
+    } catch (error) {}
     setLoadingActor(false)
   }
 
@@ -513,13 +509,6 @@ export default function DramaDetail() {
     }
   }
 
-  const getFormattedDuration = (runTime) => {
-    if (!runTime) return 'Inconnue'
-    const h = Math.floor(runTime / 60)
-    const m = runTime % 60
-    return `${h > 0 ? `${h}H` : ''}${m > 0 ? `${m}M` : ''}`.trim()
-  }
-
   const getWatchProviders = () => {
     if (!tmdbData?.['watch/providers']?.results?.FR) return []
     const frProviders = tmdbData['watch/providers'].results.FR
@@ -529,13 +518,12 @@ export default function DramaDetail() {
     return Array.from(new Map(allProviders.map(item => [item.provider_id, item])).values())
   }
 
-  const { hasNetflix, hasPrimeVideo, hasDisneyPlus, hasAppleTV } = (() => {
+  const { hasNetflix, hasPrimeVideo, hasDisneyPlus } = (() => {
     const providerNames = getWatchProviders().map(p => p.provider_name)
     return {
       hasNetflix: providerNames.includes('Netflix'),
       hasPrimeVideo: providerNames.includes('Amazon Prime Video'),
-      hasDisneyPlus: providerNames.includes('Disney Plus'),
-      hasAppleTV: providerNames.includes('Apple TV')
+      hasDisneyPlus: providerNames.includes('Disney Plus')
     }
   })()
 
@@ -547,17 +535,14 @@ export default function DramaDetail() {
       voirDrama: `https://voirdrama.to/drama/${slugName}/`,
       netflix: `https://www.netflix.com/search?q=${encodedTitle}`,
       primeVideo: `https://www.primevideo.com/search?q=${encodedTitle}`,
-      disneyPlus: `https://www.disneyplus.com/search?q=${encodedTitle}`,
-      test: `https://voirdrama.to/`
+      disneyPlus: `https://www.disneyplus.com/search?q=${encodedTitle}`
     }
     window.open(links[platform], '_blank', 'noopener,noreferrer')
   }
 
   const handleCopyAndOpenVoirDrama = () => {
     const titleToCopy = originalTitle || englishTitle || localDrama?.title || ''
-    navigator.clipboard.writeText(titleToCopy).catch(err => {
-      console.error('Erreur lors de la copie:', err)
-    })
+    navigator.clipboard.writeText(titleToCopy).catch(err => {})
     window.open('https://voirdrama.to/', '_blank', 'noopener,noreferrer')
   }
 
@@ -728,37 +713,6 @@ export default function DramaDetail() {
             </div>
 
           </div> 
-
-          {editMode && (
-            <div style={{ marginBottom: '1.5rem', background: 'rgba(255, 255, 255, 0.04)', padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
-              <div style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: '1rem' }}>
-                <div>
-                  <label className="panel-label">Catégorie</label>
-                  <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className="status-select">
-                    <option value="Not Found">Introuvable</option>
-                    <option value="To Watch">À voir</option>
-                    <option value="Watching">En cours</option>
-                    <option value="Watched">Vu</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="panel-label">Ma note</label>
-                  <input type="number" step="0.1" min="0" max="5" value={personalRating} onChange={(e) => setPersonalRating(e.target.value)} className="input-field" />
-                </div>
-                <div>
-                  <label className="panel-label">Note VoirDrama</label>
-                  <input type="number" step="0.1" min="0" max="5" value={voirDramaRating} onChange={(e) => setVoirDramaRating(e.target.value)} className="input-field" />
-                </div>
-              </div>
-              <label className="panel-label">Commentaire</label>
-              <textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} className="textarea-field" style={{ minHeight: '80px', marginBottom: '1rem' }} />
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                <button onClick={handleSaveChanges} disabled={saving} className="primary-btn">{saving ? 'Enregistrement...' : 'Valider'}</button>
-                <button onClick={() => setEditMode(false)} className="secondary-btn">Annuler</button>
-                {saveMessage && <span style={{ color: 'var(--primary-color)', alignSelf: 'center' }}>{saveMessage}</span>}
-              </div>
-            </div>
-          )}
 
           <div className="synopsis-box">
             
@@ -1049,7 +1003,7 @@ export default function DramaDetail() {
                           </div>
 
                           <div style={{ fontSize: '0.78rem', color: '#c7d0ff', fontStyle: 'italic', opacity: 0.9 }}>
-                            {credit.title_fr && credit.title_fr !== (credit.title_en || credit.name) ? `FR : ${credit.title_fr}` : `EN : ${credit.title_en || credit.name}`}
+                            FR : {credit.title_fr && credit.title_fr !== (credit.title_en || credit.name) ? `FR : ${credit.title_fr}` : `EN : ${credit.title_en || credit.name}`}
                           </div>
 
                           <div className="drama-genres" style={{ color: 'var(--primary-color)', fontWeight: '600', fontSize: '0.8rem' }}>
