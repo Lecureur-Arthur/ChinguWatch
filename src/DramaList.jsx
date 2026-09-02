@@ -373,7 +373,7 @@ export default function DramaList({ session, status }) {
                 
                 {/* 3. TITRE EN FRANÇAIS */}
                 <div style={{ fontSize: '0.78rem', color: '#c7d0ff', fontStyle: 'italic', opacity: 0.9, marginTop: '2px' }}>
-                  {frenchTitle && frenchTitle !== englishTitle ? `FR : ${frenchTitle}` : 'FR : Titre identique'}
+                  {frenchTitle && frenchTitle !== englishTitle ? `FR : ${frenchTitle}` : `FR : ${englishTitle}`}
                 </div>
 
                 <div className="drama-genres">{drama.genre || 'Aucun genre spécifié'}</div>
