@@ -79,6 +79,46 @@ export default function DramaDetail() {
     return latinPattern.test(originalText) ? originalText : fallbackText || originalText
   }
 
+  const getCastDisplayName = (actor) => {
+    const cachedName = castNameMap[actor.id]
+    if (cachedName) return cachedName
+    if (actor.name && latinPattern.test(actor.name)) return actor.name
+    if (actor.original_name && latinPattern.test(actor.original_name)) return actor.original_name
+    return actor.name || actor.original_name || 'Inconnu'
+  }
+
+  const fetchRomanizedCastNames = async (cast) => {
+    const apiKey = import.meta.env.VITE_TMDB_API_KEY
+    const missingNames = cast.filter(actor => !castNameMap[actor.id] && !latinPattern.test(actor.name))
+    if (missingNames.length === 0) return
+
+    const fetches = missingNames.map(async (actor) => {
+      try {
+        const response = await fetch(`https://api.themoviedb.org/3/person/${actor.id}?language=en-US&api_key=${apiKey}`)
+        const data = await response.json()
+        const name = getLatinText(data.name, actor.name)
+        return [actor.id, name]
+      } catch (error) {
+        return [actor.id, actor.name]
+      }
+    })
+
+    const results = await Promise.all(fetches)
+    setCastNameMap(prev => {
+      const next = { ...prev }
+      results.forEach(([id, name]) => {
+        if (id) next[id] = name
+      })
+      return next
+    })
+  }
+  
+  useEffect(() => {
+    if (tmdbData?.credits?.cast?.length) {
+      fetchRomanizedCastNames(tmdbData.credits.cast.slice(0, 16))
+    }
+  }, [tmdbData])
+
   useEffect(() => {
     setSelectedActor(null) // Ferme la modale si elle était ouverte
     setPreviewMode(false)  // Réinitialise le mode aperçu
@@ -846,8 +886,8 @@ export default function DramaDetail() {
         <div className="cast-section">
           <div className="cast-grid">
             {tmdbData.credits.cast.slice(0, 16).map((actor) => {
-              
               const isSeen = seenActors.has(actor.id);
+              const displayName = getCastDisplayName(actor);
 
               return (
                 <div 
@@ -855,36 +895,19 @@ export default function DramaDetail() {
                   className={`cast-card ${isSeen ? 'actor-seen' : ''}`} 
                   onClick={() => fetchActorCredits(actor)}
                   style={{ cursor: 'pointer' }}
-                  title={isSeen ? "Vous avez déjà vu cet acteur ! Cliquez pour sa filmographie." : "Voir sa filmographie"}
                 >
-                  
                   <div className="cast-img-wrapper">
-                    
-                    {isSeen && (
-                      <div className="actor-seen-badge">
-                        ✓ Déjà vu
-                      </div>
-                    )}
-
+                    {isSeen && <div className="actor-seen-badge">✓ Déjà vu</div>}
                     {actor.profile_path ? (
-                      <img 
-                        src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`} 
-                        alt={actor.name} 
-                        className="cast-image"
-                        loading="lazy"
-                      />
+                      <img src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`} alt={displayName} className="cast-image" loading="lazy" />
                     ) : (
-                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', fontSize: '0.8rem', textAlign: 'center', padding: '1rem' }}>
-                        Pas d'image
-                      </div>
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666', fontSize: '0.8rem' }}>Pas d'image</div>
                     )}
                   </div>
-
                   <div className="cast-info">
-                    <div className="cast-name" title={actor.name}>{actor.name}</div>
-                    <div className="cast-role" title={actor.character}>{actor.character}</div>
+                    <div className="cast-name" title={displayName}>{displayName}</div>
+                    <div className="cast-role" title={actor.character}>Rôle : {actor.character || 'Inconnu'}</div>
                   </div>
-                  
                 </div>
               )
             })}
