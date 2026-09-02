@@ -1,106 +1,37 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from './supabaseClient'
-import { translateLongText } from './translationService'
+
+// Dictionnaire de conversion des genres TV de TMDB
+const TMDB_TV_GENRES = {
+  10759: "Action & Aventure",
+  16: "Animation",
+  35: "Comédie",
+  80: "Crime",
+  99: "Documentaire",
+  18: "Drame",
+  10751: "Familial",
+  10762: "Kids",
+  9648: "Mystère",
+  10763: "News",
+  10764: "Reality",
+  10765: "Sci-Fi & Fantasy",
+  10766: "Soap",
+  10767: "Talk",
+  10768: "Guerre & Politique",
+  37: "Western"
+};
 
 export default function AddDrama({ session }) {
   const [searchQuery, setSearchQuery] = useState('')
-  // Nouvel état pour le mode de recherche (Titre ou Acteur)
   const [searchMode, setSearchMode] = useState('title') 
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
-  const [isTranslating, setIsTranslating] = useState(false)
-  const [translationProgress, setTranslationProgress] = useState(0)
-
-  const [title, setTitle] = useState('')
-  const [posterUrl, setPosterUrl] = useState('')
-  const [selectedGenres, setSelectedGenres] = useState([])
-  const [apiGenres, setApiGenres] = useState([])
-  const [siteRating, setSiteRating] = useState('')
-  const [voirDramaRating, setVoirDramaRating] = useState('')
-  const [synopsis, setSynopsis] = useState('')
-  const [status, setStatus] = useState('To Watch')
-  const [selectedDramaDetails, setSelectedDramaDetails] = useState(null)
   const [addingDrama, setAddingDrama] = useState(false)
-  const [addMessage, setAddMessage] = useState('')
-  
-  const [personalRating, setPersonalRating] = useState('')
-  const [comment, setComment] = useState('')
-  
-  const [loading, setLoading] = useState(false)
+  const [userDramas, setUserDramas] = useState([])
 
-  const synopsisRef = useRef(null)
+  const navigate = useNavigate()
 
-  const [availableGenres, setAvailableGenres] = useState([
-    'Action', 'Affaire', 'Amitié', 'Arts Martiaux', 'Aventure', 'BL', 'Comédie',
-    'Contexte Scolaire', 'Crime', 'Culinaire', 'Documentaire', 'Drame', 'Famille',
-    'Fantastique', 'Guerre', 'Historique', 'Horreur', 'Jeunesse', 'Judiciaire',
-    'Mature', 'Médical', 'Mélodrame', 'Militaire', 'Musique', 'Mystère', 'Politique',
-    'Psychologique', 'Romance', 'SF', 'Sitcom', 'Sport', 'Surnaturel', 'Thriller',
-    'Tokasatsu', 'Vie Quotidienne', 'Wuxia', 'Yuri'
-  ])
-
-  useEffect(() => {
-    if (synopsisRef.current) {
-      synopsisRef.current.style.height = 'auto'
-      synopsisRef.current.style.height = `${synopsisRef.current.scrollHeight}px`
-    }
-  }, [synopsis])
-
-  const normalizeGenres = (genresList) => {
-    const genreMapping = {
-      'Action & Adventure': ['Action', 'Aventure'],
-      'Science-Fiction & Fantastique': ['SF', 'Fantastique'],
-      'Sci-Fi & Fantasy': ['SF', 'Fantastique'],
-      'Familial': ['Famille'],
-      'Kids': ['Jeunesse'],
-      'War & Politics': ['Guerre', 'Politique']
-    }
-
-    let normalized = []
-    genresList.forEach(g => {
-      if (genreMapping[g]) {
-        normalized.push(...genreMapping[g])
-      } else {
-        normalized.push(g)
-      }
-    })
-    return normalized
-  }
-
-  const getLatinText = (originalText, fallbackText) => {
-    const latinPattern = /^[A-Za-zÀ-ÖØ-öø-ÿ0-9 .,'\-()]+$/
-    if (!originalText) return fallbackText || ''
-    if (latinPattern.test(originalText)) return originalText
-    return fallbackText || originalText
-  }
-
-  useEffect(() => {
-    const fetchGenres = async () => {
-      try {
-        const apiKey = import.meta.env.VITE_TMDB_API_KEY
-        if (!apiKey) return
-
-        const response = await fetch(`https://api.themoviedb.org/3/genre/tv/list?language=fr-FR&api_key=${apiKey}`)
-        const data = await response.json()
-
-        if (data.genres) {
-          const tmdbGenres = data.genres.map(g => g.name)
-          const normalizedTmdbGenres = normalizeGenres(tmdbGenres)
-          
-          setAvailableGenres(prevGenres => {
-            const combined = new Set([...prevGenres, ...normalizedTmdbGenres])
-            return Array.from(combined).sort((a, b) => a.localeCompare(b, 'fr'))
-          })
-        }
-      } catch (error) {
-        console.error("Erreur de récupération des genres", error)
-      }
-    }
-    
-    fetchGenres()
-  }, [])
-
-  // J'ai ajouté searchMode dans les dépendances pour relancer la recherche si on change de mode
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       if (searchQuery.trim() !== '') {
@@ -113,13 +44,30 @@ export default function AddDrama({ session }) {
     return () => clearTimeout(delayDebounceFn)
   }, [searchQuery, searchMode])
 
+  useEffect(() => {
+    const fetchUserDramas = async () => {
+      if (session?.user?.id) {
+        const { data } = await supabase
+          .from('dramas')
+          .select('*')
+          .eq('user_id', session.user.id)
+        if (data) setUserDramas(data)
+      }
+    }
+    fetchUserDramas()
+  }, [session])
+
+  const createSlug = (title) => {
+    return title ? title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim() : ''
+  }
+
+  // --- RECHERCHE MISE À JOUR (Exclusion des Animés) ---
   const executeSearch = async (query) => {
     setIsSearching(true)
     const apiKey = import.meta.env.VITE_TMDB_API_KEY
     
     try {
       if (searchMode === 'title') {
-        // --- RECHERCHE PAR TITRE ---
         const [responseFr, responseEn] = await Promise.all([
           fetch(`https://api.themoviedb.org/3/search/tv?query=${encodeURIComponent(query)}&language=fr-FR&api_key=${apiKey}`),
           fetch(`https://api.themoviedb.org/3/search/tv?query=${encodeURIComponent(query)}&language=en-US&api_key=${apiKey}`)
@@ -128,7 +76,16 @@ export default function AddDrama({ session }) {
         const dataFr = await responseFr.json()
         const dataEn = await responseEn.json()
         
-        const mergedResults = (dataFr.results || []).map(frItem => {
+        // 1. FILTRE ANTI-ANIMÉ : On exclut toutes les séries ayant le genre 16 (Animation)
+        const nonAnimatedResults = (dataFr.results || []).filter(item => !(item.genre_ids && item.genre_ids.includes(16)))
+
+        // On limite aux 12 premiers résultats (parmi les séries non-animées)
+        const topResults = nonAnimatedResults.slice(0, 12)
+
+        const detailedResults = await Promise.all(topResults.map(async (frItem) => {
+          const detailRes = await fetch(`https://api.themoviedb.org/3/tv/${frItem.id}?language=fr-FR&api_key=${apiKey}`)
+          const detailData = await detailRes.json()
+
           const enItem = (dataEn.results || []).find(item => item.id === frItem.id)
           const isAsian = ['zh', 'ko', 'ja', 'th'].includes(frItem.original_language)
           const isUntranslated = isAsian && frItem.name === frItem.original_name
@@ -136,43 +93,55 @@ export default function AddDrama({ session }) {
           
           return {
             ...frItem,
+            number_of_seasons: detailData.number_of_seasons,
+            number_of_episodes: detailData.number_of_episodes,
+            tmdb_status: detailData.status,
             displayName: displayName
           }
-        })
+        }))
         
-        setSearchResults(mergedResults)
+        setSearchResults(detailedResults)
       } 
       else if (searchMode === 'actor') {
-        // --- RECHERCHE PAR ACTEUR ---
-        // On utilise en-US pour la recherche de nom, c'est souvent plus précis pour le Pinyin
         const personResponse = await fetch(`https://api.themoviedb.org/3/search/person?query=${encodeURIComponent(query)}&language=en-US&api_key=${apiKey}`)
         const personData = await personResponse.json()
 
         if (personData.results && personData.results.length > 0) {
           let allDramas = [];
 
-          // On boucle sur les 3 premiers résultats pour éviter de tomber sur un homonyme sans séries
           for (let i = 0; i < Math.min(3, personData.results.length); i++) {
             const actorId = personData.results[i].id;
-
-            // On va chercher la filmographie de cette personne
             const creditsResponse = await fetch(`https://api.themoviedb.org/3/person/${actorId}/tv_credits?language=fr-FR&api_key=${apiKey}`);
             const creditsData = await creditsResponse.json();
 
-            // Si cette personne a des rôles à la TV, on les garde et on arrête de chercher !
             if (creditsData.cast && creditsData.cast.length > 0) {
-              allDramas = creditsData.cast.map(item => ({
-                ...item,
-                displayName: item.name || item.original_name
-              }));
+              
+              // 2. FILTRE ANTI-ANIMÉ POUR LES ACTEURS (Exclure le doublage d'animes)
+              const nonAnimatedCredits = creditsData.cast.filter(item => !(item.genre_ids && item.genre_ids.includes(16)))
+
+              const topCredits = nonAnimatedCredits
+                .sort((a, b) => b.popularity - a.popularity)
+                .slice(0, 12);
+
+              const detailedCredits = await Promise.all(topCredits.map(async (item) => {
+                const detailRes = await fetch(`https://api.themoviedb.org/3/tv/${item.id}?language=fr-FR&api_key=${apiKey}`)
+                const detailData = await detailRes.json()
+
+                return {
+                  ...item,
+                  number_of_seasons: detailData.number_of_seasons,
+                  number_of_episodes: detailData.number_of_episodes,
+                  tmdb_status: detailData.status,
+                  displayName: item.name || item.original_name
+                }
+              }))
+
+              allDramas = detailedCredits;
               break; 
             }
           }
 
-          // Filtre anti-doublon (si l'acteur a 2 rôles dans le même drama, TMDB le renvoie 2 fois)
           const uniqueDramas = Array.from(new Map(allDramas.map(item => [item.id, item])).values());
-
-          // Trier par popularité pour que les plus gros succès soient en haut
           uniqueDramas.sort((a, b) => b.popularity - a.popularity);
 
           setSearchResults(uniqueDramas);
@@ -187,245 +156,61 @@ export default function AddDrama({ session }) {
     }
   }
 
-  const translateLanguageCode = (code) => {
-    const languageMap = {
-      en: 'Anglais',
-      fr: 'Français',
-      ja: 'Japonais',
-      ko: 'Coréen',
-      zh: 'Chinois',
-      es: 'Espagnol',
-      de: 'Allemand',
-      it: 'Italien',
-      pt: 'Portugais',
-      ru: 'Russe',
-      th: 'Thaïlandais',
-      vi: 'Vietnamien'
-    }
-    return languageMap[code] || code || 'Inconnue'
-  }
-
-  const translateStatus = (status) => {
-    const statusMap = {
-      Ended: 'Terminé',
-      'Returning Series': 'En cours de diffusion',
-      Canceled: 'Annulé',
-      'In Production': 'En production',
-      Pilot: 'Pilote'
-    }
-    return statusMap[status] || status || 'Inconnu'
-  }
-
-  const toggleGenre = (genreName) => {
-    if (apiGenres.includes(genreName)) return
-
-    if (selectedGenres.includes(genreName)) {
-      setSelectedGenres(selectedGenres.filter(g => g !== genreName))
-    } else {
-      setSelectedGenres([...selectedGenres, genreName])
-    }
-  }
-
-  const selectDrama = async (dramaId, selectedTitle) => {
-    setIsSearching(true)
-    const apiKey = import.meta.env.VITE_TMDB_API_KEY
-
-    try {
-      const [responseFr, responseEn] = await Promise.all([
-        fetch(`https://api.themoviedb.org/3/tv/${dramaId}?language=fr-FR&append_to_response=credits,watch/providers&api_key=${apiKey}`),
-        fetch(`https://api.themoviedb.org/3/tv/${dramaId}?language=en-US&append_to_response=credits,watch/providers&api_key=${apiKey}`)
-      ])
-
-      const dataFr = await responseFr.json()
-      const dataEn = await responseEn.json()
-
-      const displayName = getLatinText(dataFr.name || dataFr.original_name, dataEn?.name || dataEn?.original_name || dataFr.original_name)
-      const displayOriginalName = getLatinText(dataFr.original_name, dataEn?.original_name || dataFr.name)
-      const frOverview = dataFr.overview
-      const enOverview = dataEn?.overview
-      let currentSynopsis = ''
-
-      if (frOverview && enOverview && frOverview.trim() === enOverview.trim()) {
-        currentSynopsis = await translateLongText(enOverview)
-      } else if (frOverview) {
-        currentSynopsis = frOverview
-      } else if (enOverview) {
-        currentSynopsis = await translateLongText(enOverview)
-      }
-
-      const getWatchProviders = (data) => {
-        if (!data?.['watch/providers']?.results?.FR) return []
-        const frProviders = data['watch/providers'].results.FR
-        const flatrate = frProviders.flatrate || []
-        const free = frProviders.free || []
-        const allProviders = [...flatrate, ...free]
-        return Array.from(new Map(allProviders.map(item => [item.provider_id, item])).values())
-      }
-
-      setSelectedDramaDetails({
-        id: dramaId,
-        displayName,
-        displayOriginalName,
-        status: translateStatus(dataFr.status),
-        first_air_date: dataFr.first_air_date,
-        number_of_episodes: dataFr.number_of_episodes,
-        number_of_seasons: dataFr.number_of_seasons,
-        vote_average: dataFr.vote_average,
-        original_language: dataFr.original_language,
-        genres: dataFr.genres || [],
-        displayOverview: currentSynopsis,
-        poster_path: dataFr.poster_path,
-        overview: dataFr.overview || dataEn.overview || '',
-        name: dataFr.name,
-        original_name: dataFr.original_name,
-        cast_list: dataFr.credits?.cast?.slice(0, 15) || [],
-        watch_providers: getWatchProviders(dataFr),
-        episode_run_time: dataFr.episode_run_time?.[0] || null
-      })
-
-      setSearchResults([])
-      setSearchQuery('')
-    } catch (error) {
-      console.error('Erreur lors de la sélection du drama', error)
-    }
-
-    setIsSearching(false)
-  }
-
-  const handleBackToSearch = () => {
-    setSelectedDramaDetails(null)
-    setAddMessage('')
-  }
-
-  const addSelectedDramaToList = async () => {
-    if (!selectedDramaDetails) return
+  const handleQuickAdd = async (e, drama) => {
+    e.preventDefault()
+    e.stopPropagation() 
+    
+    if (addingDrama) return
     setAddingDrama(true)
-    setAddMessage('')
 
     try {
-      const { data: authData } = await supabase.auth.getSession()
-      const userId = authData?.session?.user?.id
-      if (!userId) {
-        setAddMessage('Utilisateur non connecté.')
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        alert('Utilisateur non connecté.')
         setAddingDrama(false)
         return
       }
 
-      const title = selectedDramaDetails.displayName || selectedDramaDetails.name || selectedDramaDetails.original_name || 'Titre inconnu'
-      const { data: existing, error: existError } = await supabase
+      const title = drama.displayName || drama.name || drama.original_name || 'Titre inconnu'
+
+      const { data: existing } = await supabase
         .from('dramas')
         .select('id')
-        .eq('user_id', userId)
-        .eq('title', title)
+        .eq('user_id', user.id)
+        .eq('tmdb_id', drama.id)
         .limit(1)
 
-      if (existError) {
-        console.error('Erreur lors de la vérification du drama existant', existError)
-        setAddMessage('Impossible de vérifier si le drama existe déjà.')
+      if (existing && existing.length > 0) {
+        alert('Ce drama est déjà présent dans votre liste.')
         setAddingDrama(false)
         return
       }
 
-      if (existing?.length > 0) {
-        setAddMessage('Ce drama est déjà présent dans votre liste.')
-        setAddingDrama(false)
-        return
+      const posterUrl = drama.poster_path ? `https://image.tmdb.org/t/p/w500${drama.poster_path}` : null
+
+      const newDrama = {
+        user_id: user.id,
+        title: title,
+        poster_url: posterUrl,
+        status: 'To Watch', 
+        site_rating: drama.vote_average || null,
+        tmdb_id: drama.id,
+        episode_run_time: 0
       }
 
-      const genreString = selectedDramaDetails.genres?.map((genre) => genre.name).join(', ') || ''
-      const posterUrl = selectedDramaDetails.poster_path ? `https://image.tmdb.org/t/p/w500${selectedDramaDetails.poster_path}` : null
-      const siteRating = selectedDramaDetails.vote_average ? parseFloat(selectedDramaDetails.vote_average.toFixed(1)) : null
+      const { data, error } = await supabase.from('dramas').insert([newDrama]).select()
 
-      const { error: insertError } = await supabase.from('dramas').insert([
-        {
-          title,
-          genre: genreString,
-          site_rating: siteRating || null,
-          voirdrama_rating: voirDramaRating || null,
-          personal_rating: null,
-          comment: null,
-          synopsis: selectedDramaDetails.displayOverview || selectedDramaDetails.overview || '',
-          status: 'To Watch',
-          poster_url: posterUrl,
-          user_id: userId,
-          tmdb_id: selectedDramaDetails.id,
-          tmdb_status: selectedDramaDetails.status || null,
-          first_air_date: selectedDramaDetails.first_air_date || null,
-          number_of_seasons: selectedDramaDetails.number_of_seasons || null,
-          number_of_episodes: selectedDramaDetails.number_of_episodes || null,
-          episode_run_time: selectedDramaDetails.episode_run_time || null,
-          cast_list: selectedDramaDetails.cast_list || [],
-          watch_providers: selectedDramaDetails.watch_providers || []
-        }
-      ])
-
-      if (insertError) {
-        console.error('Erreur lors de l ajout du drama', insertError)
-        setAddMessage('Erreur lors de l’ajout à la liste.')
-      } else {
-        setAddMessage('Drama ajouté à la liste À voir.')
+      if (error) {
+        alert("Erreur lors de l'ajout : " + error.message)
+      } else if (data && data.length > 0) {
+        setUserDramas(prev => [...prev, data[0]])
       }
     } catch (error) {
-      console.error('Erreur lors de l ajout du drama', error)
-      setAddMessage('Erreur lors de l’ajout à la liste.')
+      console.error("Erreur lors de l'ajout rapide", error)
+      alert("Erreur système.")
     }
-
-    setAddingDrama(false)
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
     
-    if (status === 'Watched' && !personalRating) {
-      alert("La note personnelle est obligatoire pour une série vue.")
-      return
-    }
-
-    setLoading(true)
-
-    const finalGenres = selectedGenres.join(', ')
-
-    const { error } = await supabase
-      .from('dramas')
-      .insert([
-        {
-          title,
-          genre: finalGenres,
-          site_rating: siteRating || null,
-          voirdrama_rating: voirDramaRating || null,
-          personal_rating: status === 'Watched' ? personalRating : null,
-          comment: status === 'Watched' ? comment : null,
-          synopsis,
-          status,
-          poster_url: posterUrl,
-          user_id: session.user.id,
-          tmdb_status: null,
-          first_air_date: null,
-          number_of_seasons: null,
-          number_of_episodes: null,
-          episode_run_time: null,
-          cast_list: null,
-          watch_providers: null
-        }
-      ])
-
-    if (error) {
-      alert(error.message)
-    } else {
-      alert('Série ajoutée avec succès.')
-      setTitle('')
-      setPosterUrl('')
-      setSelectedGenres([])
-      setApiGenres([])
-      setSiteRating('')
-      setVoirDramaRating('')
-      setPersonalRating('')
-      setComment('')
-      setSynopsis('')
-      setStatus('To Watch')
-      setSelectedDramaDetails(null)
-    }
-    setLoading(false)
+    setAddingDrama(false)
   }
 
   return (
@@ -435,7 +220,6 @@ export default function AddDrama({ session }) {
       <div style={{ marginBottom: '1rem', paddingBottom: '0.8rem', borderBottom: '1px solid var(--border-color)' }}>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
           
-          {/* Nouveau menu déroulant pour le choix de la recherche */}
           <select 
             value={searchMode} 
             onChange={(e) => setSearchMode(e.target.value)}
@@ -446,7 +230,6 @@ export default function AddDrama({ session }) {
             <option value="actor">Acteur/Actrice</option>
           </select>
 
-          {/* L'input ajusté pour prendre le reste de l'espace */}
           <input 
             type="text" 
             placeholder={searchMode === 'title' ? "Rechercher un drama avec TMDB..." : "Rechercher un(e) acteur/actrice..."} 
@@ -456,172 +239,191 @@ export default function AddDrama({ session }) {
             className="input-field"
           />
           
-          {isSearching && !isTranslating && <span style={{ fontSize: '0.9rem', color: '#c7d0ff', whiteSpace: 'nowrap' }}>Recherche...</span>}
-          {isTranslating && <span style={{ fontSize: '0.9rem', color: 'var(--secondary-text)', whiteSpace: 'nowrap' }}>Traduction en cours... {translationProgress}%</span>}
+          {isSearching && <span style={{ fontSize: '0.9rem', color: '#c7d0ff', whiteSpace: 'nowrap' }}>Recherche...</span>}
         </div>
         
         {searchResults.length > 0 && (
-          <div style={{ marginTop: '0.5rem', backgroundColor: '#1f1f1f', borderRadius: '8px', padding: '0.5rem', textAlign: 'left' }}>
-            {searchResults.map((result) => (
-              <div 
-                key={result.id} 
-                onClick={() => selectDrama(result.id, result.displayName)}
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '1rem', 
-                  padding: '0.5rem', 
-                  cursor: 'pointer', 
-                  borderBottom: '1px solid #333', 
-                  transition: 'background-color 0.2s' 
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2a2a2a'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-              >
-                {result.poster_path ? (
-                  <img 
-                    src={`https://image.tmdb.org/t/p/w92${result.poster_path}`} 
-                    alt={result.displayName} 
-                    style={{ width: '45px', height: '68px', objectFit: 'cover', borderRadius: '4px', flexShrink: 0 }} 
-                  />
-                ) : (
-                  <div style={{ width: '45px', height: '68px', backgroundColor: '#333', borderRadius: '4px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ fontSize: '0.7rem', color: '#c7d0ff' }}>Pas d'image</span>
+          <div className="actor-credits-grid" style={{ marginTop: '1.5rem', marginBottom: '2rem' }}>
+            {searchResults.map((result) => {
+              
+              const catalogEntry = userDramas.find(d => 
+                (d.tmdb_id && d.tmdb_id === result.id) || 
+                (createSlug(d.title) === createSlug(result.displayName || result.name || result.original_name))
+              );
+
+              let catalogInfo = null;
+              if (catalogEntry) {
+                switch(catalogEntry.status) {
+                  case 'Watched': 
+                    catalogInfo = { 
+                      icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>,
+                      text: ' Vu', classSuffix: 'watched' 
+                    }; 
+                    break;
+                  case 'Watching': 
+                    catalogInfo = { 
+                      icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>,
+                      text: ' En cours', classSuffix: 'watching' 
+                    }; 
+                    break;
+                  case 'To Watch': 
+                    catalogInfo = { 
+                      icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>,
+                      text: ' À voir', classSuffix: 'towatch' 
+                    }; 
+                    break;
+                  case 'Not Found': 
+                    catalogInfo = { 
+                      icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>,
+                      text: 'Introuvable', classSuffix: 'notfound' 
+                    }; 
+                    break;
+                  default: break;
+                }
+              }
+
+              const genreNames = (result.genre_ids || [])
+                .map(id => TMDB_TV_GENRES[id])
+                .filter(Boolean)
+                .slice(0, 2)
+                .join(', ');
+
+              const year = result.first_air_date ? result.first_air_date.substring(0, 4) : '????';
+              const frTitle = result.name;
+              const enTitle = result.displayName;
+              const isEnded = result.tmdb_status === 'Ended' || result.tmdb_status === 'Canceled';
+
+              return (
+                <div 
+                  key={result.id} 
+                  className={`drama-card ${catalogInfo ? `card-in-catalog status-${catalogInfo.classSuffix}` : ''}`}
+                  onClick={() => navigate(catalogEntry ? `/drama/${createSlug(catalogEntry.title)}` : `/drama/preview-${result.id}`)}
+                  style={{ cursor: 'pointer' }}
+                  title={catalogEntry ? "Ouvrir depuis mon catalogue" : "Cliquez pour voir les détails de la série"}
+                >
+                  <div className="poster-wrapper">
+                    
+                    {result.poster_path ? (
+                      <img src={`https://image.tmdb.org/t/p/w500${result.poster_path}`} alt={enTitle} className="drama-poster" loading="lazy" />
+                    ) : (
+                      <div className="drama-poster" style={{ backgroundColor: '#333', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ color: '#c7d0ff' }}>Pas d'image</span>
+                      </div>
+                    )}
+                    
+                    {/* NOTE TMDB & STATUT EN HAUT À GAUCHE */}
+                    <div className="card-action-btn card-action-left" style={{ width: 'auto', padding: '0 10px', fontSize: '0.9rem', gap: '8px', display: 'flex', alignItems: 'center' }}>
+                      
+                      {/* Étoile et Note */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }} title="Note TMDB">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="#facc15" stroke="#facc15" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                        </svg>
+                        <span style={{ fontWeight: 'bold' }}>
+                          {result.vote_average ? result.vote_average.toFixed(1) : 'N/A'}
+                        </span>
+                      </div>
+
+                      {/* Petite ligne de séparation verticale */}
+                      <div style={{ width: '1px', height: '12px', backgroundColor: 'rgba(255,255,255,0.3)' }}></div>
+
+                      {/* Icône de Statut (Terminé ou En cours) */}
+                      <div title={isEnded ? "Série terminée" : "En cours de production"} style={{ display: 'flex', alignItems: 'center', color: isEnded ? '#a7f3d0' : '#fecdd3' }}>
+                        {isEnded ? (
+                          <svg width="14" height="10" viewBox="0 0 23 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M15.8565 6.36375L13.2315 8.98875L16.9703 12.7275L14.8493 14.8492L11.1105 11.1105L7.371 14.8492L5.25 12.7282L8.98875 8.9895L6.36375 6.3645L4.24275 8.4855L0 4.24275L4.24275 0L11.1105 6.86775L17.9783 0L22.221 4.24275L17.9783 8.4855L15.8565 6.36375Z" fill="currentColor"/>
+                          </svg>
+                        ) : (
+                          <svg width="14" height="14" viewBox="0 0 21 21" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M6.5 4H4.7C6.2 2.7 8 2 10 2C10.3 2 10.6 2 10.9 2.1C11.4 2.2 11.9 1.8 12 1.2C12.1 0.7 11.7 0.2 11.1 0.0999999C10.7 -9.68576e-08 10.4 0 10 0C7.6 0 5.3 0.9 3.5 2.4V1C3.5 0.4 3.1 0 2.5 0C1.9 0 1.5 0.4 1.5 1V5C1.5 5.6 1.9 6 2.5 6H6.5C7.1 6 7.5 5.6 7.5 5C7.5 4.4 7.1 4 6.5 4ZM5 12.5C4.4 12.5 4 12.9 4 13.5V15.3C2.7 13.8 2 12 2 10C2 9.7 2 9.4 2.1 9.1C2.2 8.6 1.8 8.1 1.2 8C0.7 7.9 0.2 8.3 0.0999999 8.9C-9.68575e-08 9.3 0 9.6 0 10C0 12.4 0.9 14.7 2.4 16.5H1C0.4 16.5 0 16.9 0 17.5C0 18.1 0.4 18.5 1 18.5H5C5.3 18.5 5.6 18.3 5.8 18.1C5.8 18 5.9 17.9 5.9 17.8C5.9 17.7 5.9 17.7 5.9 17.6V17.5V13.5C6 12.9 5.6 12.5 5 12.5ZM19 3.5C19.6 3.5 20 3.1 20 2.5C20 1.9 19.6 1.5 19 1.5H15C14.9 1.5 14.9 1.5 14.8 1.5C14.7 1.5 14.6 1.6 14.5 1.6C14.4 1.7 14.3 1.7 14.3 1.8C14.3 1.9 14.2 2 14.2 2C14.2 2.1 14.2 2.1 14.2 2.2V2.3V6.3C14.2 6.9 14.6 7.3 15.2 7.3C15.8 7.3 16.2 6.9 16.2 6.3V4.7C17.5 6.1 18.2 8 18.2 10C18.2 10.3 18.2 10.6 18.1 10.9C18 11.4 18.4 11.9 19 12H19.1C19.6 12 20 11.6 20.1 11.1C20.1 10.7 20.2 10.4 20.2 10C20.2 7.6 19.3 5.3 17.8 3.5H19ZM18.3 14.5C18.2 14.4 18.1 14.3 18 14.2C17.9 14.1 17.8 14.1 17.7 14.1H17.6H17.5H13.5C12.9 14.1 12.5 14.5 12.5 15.1C12.5 15.7 12.9 16.1 13.5 16.1H15.3C13.9 17.4 12 18.1 10 18.1C9.7 18.1 9.4 18.1 9.1 18C8.6 17.9 8.1 18.3 8 18.9C7.9 19.5 8.3 19.9 8.9 20C9.3 20 9.6 20.1 10 20.1C12.4 20.1 14.7 19.2 16.5 17.7V19C16.5 19.6 16.9 20 17.5 20C18.1 20 18.5 19.6 18.5 19V15C18.5 14.8 18.4 14.6 18.3 14.5Z" fill="currentColor"/>
+                          </svg>
+                        )}
+                      </div>
+
+                    </div>
+
+                    <div 
+                      className="card-action-btn card-action-right" 
+                      title={catalogEntry ? "Déjà dans le catalogue" : "Ajout rapide à 'À voir'"} 
+                      onClick={(e) => {
+                        if (!catalogEntry) {
+                          handleQuickAdd(e, result);
+                        } else {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }
+                      }}
+                      style={{ 
+                        color: '#fff', 
+                        background: catalogEntry ? 'rgba(0,0,0,0.7)' : 'rgba(160, 116, 255, 0.95)', 
+                        borderLeft: '1px solid rgba(255,255,255,0.4)', 
+                        borderBottom: '1px solid rgba(255,255,255,0.4)',
+                        cursor: catalogEntry ? 'default' : 'pointer'
+                      }}
+                    >
+                      {catalogEntry ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00e676" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                      ) : (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="12" y1="5" x2="12" y2="19"></line>
+                          <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                      )}
+                    </div>
+
+                    {catalogInfo && (
+                      <div className={`catalog-status-banner banner-${catalogInfo.classSuffix}`}>
+                        {catalogInfo.icon}
+                        <span>{catalogInfo.text}</span>
+                      </div>
+                    )}
                   </div>
-                )}
-                
-                <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                  <strong style={{ color: '#fff', fontSize: '1rem', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                    {result.displayName}
-                  </strong>
-                  <span style={{ color: 'var(--secondary-text)', fontSize: '0.85rem' }}>
-                    {result.first_air_date ? result.first_air_date.substring(0, 4) : 'Date inconnue'}
-                  </span>
+
+                  <div className="drama-info" style={{ padding: '0.8rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.4rem', flex: 1 }}>
+                    
+                    <h4 className="drama-title-en" style={{ fontSize: '1.05rem', margin: 0, lineHeight: '1.2', textTransform: 'uppercase' }} title={enTitle}>
+                      {enTitle}
+                    </h4>
+                    
+                    <div className="drama-title-orig" style={{ fontSize: '0.8rem', opacity: 0.8 }}>
+                      {result.original_name || result.name} • {year}
+                    </div>
+
+                    <div style={{ fontSize: '0.78rem', color: '#c7d0ff', fontStyle: 'italic', opacity: 0.9 }}>
+                      FR : {frTitle && frTitle !== enTitle ? frTitle : 'Titre identique'}
+                    </div>
+
+                    <div className="drama-genres" style={{ color: 'var(--primary-color)', fontWeight: '600', fontSize: '0.8rem' }}>
+                      {genreNames || 'Genres inconnus'}
+                    </div>
+
+                    {searchMode === 'actor' && (
+                      <div className="drama-genres" style={{ color: 'var(--primary-color)', fontWeight: '700', fontSize: '0.85rem', marginTop: '0.2rem' }}>
+                        Rôle : {result.character || 'Inconnu'}
+                      </div>
+                    )}
+
+                    <div style={{ marginTop: 'auto', paddingTop: '0.8rem', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
+                      <span style={{ fontSize: '1.2rem', lineHeight: '1' }}>📑</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
+                        <strong style={{ color: '#fff', fontSize: '0.85rem' }}>
+                          {result.number_of_seasons ? `${result.number_of_seasons} Saison${result.number_of_seasons > 1 ? 's' : ''}` : '? Saison'}
+                        </strong>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.15rem' }}>
+                          {result.number_of_episodes ? `${result.number_of_episodes} épisodes` : '? épisodes'}
+                        </span>
+                      </div>
+                    </div>
+                    
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
-
-      {selectedDramaDetails ? (
-        <div className="panel-card" style={{ marginTop: '1rem', width: '100%', maxWidth: '1000px' }}>
-          <div className="detail-top-row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
-            <div>
-              <h2 style={{ margin: 0, color: 'var(--primary-color)', fontSize: '2rem' }}>{selectedDramaDetails.displayName}</h2>
-              {selectedDramaDetails.displayOriginalName && selectedDramaDetails.displayOriginalName !== selectedDramaDetails.displayName && (
-                <p style={{ margin: '0.35rem 0 0', color: 'var(--secondary-text)' }}>Original : {selectedDramaDetails.displayOriginalName}</p>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={handleBackToSearch}
-              className="secondary-btn"
-              style={{ height: 'fit-content', padding: '0.85rem 1.25rem' }}
-            >
-              Retour à la recherche
-            </button>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr) 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
-            <div>
-              {selectedDramaDetails.poster_path ? (
-                <img
-                  src={`https://image.tmdb.org/t/p/w500${selectedDramaDetails.poster_path}`}
-                  alt={selectedDramaDetails.displayName}
-                  style={{ width: '100%', borderRadius: '18px', marginBottom: '1rem', boxShadow: '0 20px 40px rgba(0,0,0,0.35)' }}
-                />
-              ) : (
-                <div style={{ width: '100%', minHeight: '320px', backgroundColor: '#151515', borderRadius: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#60e0ff', marginBottom: '1rem' }}>
-                  Pas d'image
-                </div>
-              )}
-
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                {selectedDramaDetails.genres?.map((genre) => (
-                  <span
-                    key={genre.id}
-                    style={{
-                      backgroundColor: 'rgba(96, 224, 255, 0.08)',
-                      color: '#c7d0ff',
-                      padding: '0.45rem 0.9rem',
-                      borderRadius: '999px',
-                      fontSize: '0.85rem'
-                    }}
-                  >
-                    {genre.name}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gap: '0.85rem' }}>
-              <div className="panel-card stat-card" style={{ padding: '1rem' }}>
-                <span className="panel-label">Statut</span>
-                <div className="panel-value">{selectedDramaDetails.status || 'Inconnu'}</div>
-              </div>
-              <div className="panel-card stat-card" style={{ padding: '1rem' }}>
-                <span className="panel-label">Première diffusion</span>
-                <div className="panel-value">{selectedDramaDetails.first_air_date ? new Date(selectedDramaDetails.first_air_date).toLocaleDateString('fr-FR') : 'Inconnue'}</div>
-              </div>
-              <div className="panel-card stat-card" style={{ padding: '1rem' }}>
-                <span className="panel-label">Saisons</span>
-                <div className="panel-value">{selectedDramaDetails.number_of_seasons ?? '–'}</div>
-              </div>
-              <div className="panel-card stat-card" style={{ padding: '1rem' }}>
-                <span className="panel-label">Épisodes</span>
-                <div className="panel-value">{selectedDramaDetails.number_of_episodes ?? '–'}</div>
-              </div>
-              <div className="panel-card stat-card" style={{ padding: '1rem' }}>
-                <span className="panel-label">Langue</span>
-                <div className="panel-value">{translateLanguageCode(selectedDramaDetails.original_language)}</div>
-              </div>
-              <div className="panel-card stat-card" style={{ padding: '1rem' }}>
-                <span className="panel-label">Note TMDB</span>
-                <div className="panel-value">{selectedDramaDetails.vote_average ? `${selectedDramaDetails.vote_average.toFixed(1)}/10` : '–'}</div>
-              </div>
-              <div className="panel-card" style={{ padding: '1rem' }}>
-                <label className="panel-label" htmlFor="voir-drama-rating">Note VoirDrama</label>
-                <input
-                  id="voir-drama-rating"
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="5"
-                  value={voirDramaRating}
-                  onChange={(e) => setVoirDramaRating(e.target.value)}
-                  placeholder="0-5"
-                  className="input-field"
-                  style={{ marginTop: '0.35rem' }}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="synopsis-card" style={{ marginBottom: '1.5rem' }}>
-            <span className="panel-label">Synopsis</span>
-            <p className="synopsis-text" style={{ margin: 0 }}>
-              {selectedDramaDetails.displayOverview || 'Aucun synopsis disponible.'}
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={addSelectedDramaToList}
-            disabled={addingDrama}
-            className="primary-btn"
-            style={{ width: '100%', padding: '1rem', fontSize: '1rem' }}
-          >
-            {addingDrama ? 'Ajout en cours...' : 'Ajouter à la liste À voir'}
-          </button>
-
-          {addMessage && <div className="info-text" style={{ marginTop: '1rem' }}>{addMessage}</div>}
-        </div>
-      ) : (
-        <div>
-          <p style={{ color: 'var(--secondary-text)', marginBottom: '1rem' }}>Recherchez un drama et cliquez dessus pour voir toutes les informations avant de l'ajouter à votre liste.</p>
-        </div>
-      )}
     </div>
   )
 }
