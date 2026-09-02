@@ -7,7 +7,7 @@ export default function DramaList({ session, status }) {
   const [dramas, setDramas] = useState([])
   const [loading, setLoading] = useState(true)
   
-  // État pour stocker les données dynamiques TMDB (titres + statut)
+  // État pour stocker les données dynamiques TMDB (titres + statut + stats)
   const [tmdbDataMap, setTmdbDataMap] = useState({})
 
   const [reviewingId, setReviewingId] = useState(null)
@@ -17,13 +17,8 @@ export default function DramaList({ session, status }) {
   // --- États pour la boîte modale de durée ---
   const [runtimeModalOpen, setRuntimeModalOpen] = useState(false)
   const [runtimeDrama, setRuntimeDrama] = useState(null)
-  const [runtimeMode, setRuntimeMode] = useState('average')
-  
-  const [avgHours, setAvgHours] = useState('')
-  const [avgMinutes, setAvgMinutes] = useState('')
-  const [totalHours, setTotalHours] = useState('')
-  const [totalMinutes, setTotalMinutes] = useState('')
-  const [individualRuntimes, setIndividualRuntimes] = useState([]) 
+  const [editRuntime, setEditRuntime] = useState(0)
+  const [savingRuntime, setSavingRuntime] = useState(false)
 
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState(status === 'Watched' ? 'personal_rating_desc' : 'tmdb_desc')
@@ -53,14 +48,14 @@ export default function DramaList({ session, status }) {
     } else {
       const dramasList = data || []
       setDramas(dramasList)
-      // On lance la récupération TMDB en arrière-plan (Titres + Statut en temps réel)
+      // On lance la récupération TMDB séquentielle en arrière-plan
       fetchTmdbDataAsync(dramasList)
     }
     
     setLoading(false)
   }
 
-  // --- Fonction pour interroger TMDB (Titres multi-langues avec fallback traduction identique à DramaDetail) ---
+  // --- Récupération TMDB séquentielle et SAUVEGARDE AUTOMATIQUE ---
   const fetchTmdbDataAsync = async (dramasArray) => {
     const apiKey = import.meta.env.VITE_TMDB_API_KEY
     if (!apiKey) return
@@ -93,7 +88,6 @@ export default function DramaList({ session, status }) {
           const origTitle = dataFr.original_name || drama.title
           let frTitle = dataFr.name
 
-          // Même logique exacte que dans DramaDetail pour forcer la traduction française si absente ou non traduite
           if (!frTitle || frTitle === enTitle || frTitle === origTitle) {
             const textToTranslate = enTitle || origTitle
             if (textToTranslate) {
@@ -104,17 +98,50 @@ export default function DramaList({ session, status }) {
             }
           }
 
+          const fetchedSeasons = dataFr.number_of_seasons || null;
+          const fetchedEpisodes = dataFr.number_of_episodes || null;
+          const fetchedRunTime = (dataFr.episode_run_time && dataFr.episode_run_time.length > 0) ? dataFr.episode_run_time[0] : 0;
+
+          // --- LOGIQUE DE SAUVEGARDE RÉTROACTIVE ---
+          let dbUpdates = {};
+          if (!drama.number_of_seasons && fetchedSeasons) dbUpdates.number_of_seasons = fetchedSeasons;
+          if (!drama.number_of_episodes && fetchedEpisodes) dbUpdates.number_of_episodes = fetchedEpisodes;
+          if (!drama.episode_run_time && fetchedRunTime > 0) dbUpdates.episode_run_time = fetchedRunTime;
+
+          if (Object.keys(dbUpdates).length > 0) {
+            await supabase.from('dramas').update(dbUpdates).eq('id', drama.id);
+          }
+
           fetchedMap[drama.id] = {
             original: origTitle,
             english: enTitle,
             french: frTitle || enTitle,
-            status: dataFr.status
+            status: dataFr.status,
+            number_of_seasons: fetchedSeasons,
+            number_of_episodes: fetchedEpisodes,
+            episode_run_time: fetchedRunTime
           }
         } else {
-          fetchedMap[drama.id] = { original: drama.title, english: drama.title, french: drama.title, status: drama.tmdb_status }
+          fetchedMap[drama.id] = { 
+            original: drama.title, 
+            english: drama.title, 
+            french: drama.title, 
+            status: drama.tmdb_status,
+            number_of_seasons: drama.number_of_seasons,
+            number_of_episodes: drama.number_of_episodes,
+            episode_run_time: drama.episode_run_time 
+          }
         }
       } catch (err) {
-        fetchedMap[drama.id] = { original: drama.title, english: drama.title, french: drama.title, status: drama.tmdb_status }
+        fetchedMap[drama.id] = { 
+          original: drama.title, 
+          english: drama.title, 
+          french: drama.title, 
+          status: drama.tmdb_status,
+          number_of_seasons: drama.number_of_seasons,
+          number_of_episodes: drama.number_of_episodes,
+          episode_run_time: drama.episode_run_time 
+        }
       }
     }
 
@@ -183,15 +210,12 @@ export default function DramaList({ session, status }) {
   const openRuntimeModal = (drama, e) => {
     e.preventDefault()
     e.stopPropagation()
-    setRuntimeDrama(drama)
-    setRuntimeMode('average')
     
-    const baseDuration = drama.episode_run_time || 0
-    const h = baseDuration >= 60 ? Math.floor(baseDuration / 60).toString() : ''
-    const m = baseDuration > 0 ? (baseDuration % 60).toString() : ''
+    const tmdbInfo = tmdbDataMap[drama.id] || {}
+    const runTime = (drama.episode_run_time && drama.episode_run_time > 0) ? drama.episode_run_time : (tmdbInfo.episode_run_time || 0)
 
-    setAvgHours(h); setAvgMinutes(m); setTotalHours(''); setTotalMinutes('');
-    setIndividualRuntimes(Array(drama.number_of_episodes || 1).fill({ h, m }))
+    setRuntimeDrama(drama)
+    setEditRuntime(runTime)
     setRuntimeModalOpen(true)
   }
 
@@ -200,31 +224,26 @@ export default function DramaList({ session, status }) {
     setRuntimeDrama(null)
   }
 
-  const handleIndividualChange = (index, field, value) => {
-    const newRuntimes = [...individualRuntimes]
-    newRuntimes[index] = { ...newRuntimes[index], [field]: value }
-    setIndividualRuntimes(newRuntimes)
-  }
-
   const handleSaveRuntime = async () => {
     if (!runtimeDrama) return
-    let calculatedRuntime = 0
-    const episodesCount = runtimeDrama.number_of_episodes || 1
+    setSavingRuntime(true)
+    
+    const calculatedRuntime = parseInt(editRuntime, 10) || 0
 
-    if (runtimeMode === 'average') {
-      calculatedRuntime = ((parseInt(avgHours, 10) || 0) * 60) + (parseInt(avgMinutes, 10) || 0)
-    } else if (runtimeMode === 'individual') {
-      const totalMins = individualRuntimes.reduce((acc, val) => acc + ((parseInt(val.h, 10) || 0) * 60) + (parseInt(val.m, 10) || 0), 0)
-      calculatedRuntime = totalMins > 0 ? Math.round(totalMins / episodesCount) : 0
-    } else {
-      const totalMins = ((parseInt(totalHours, 10) || 0) * 60) + (parseInt(totalMinutes, 10) || 0)
-      calculatedRuntime = Math.round(totalMins / episodesCount)
+    if (isNaN(calculatedRuntime) || calculatedRuntime <= 0) {
+      alert("Veuillez entrer une durée valide.")
+      setSavingRuntime(false)
+      return
     }
 
-    if (isNaN(calculatedRuntime) || calculatedRuntime <= 0) return alert("Veuillez entrer une durée valide.")
-
     const { error } = await supabase.from('dramas').update({ episode_run_time: calculatedRuntime }).eq('id', runtimeDrama.id)
-    if (!error) { closeRuntimeModal(); fetchDramas() }
+    if (!error) {
+      closeRuntimeModal()
+      fetchDramas()
+    } else {
+      alert("Erreur lors de la mise à jour : " + error.message)
+    }
+    setSavingRuntime(false)
   }
 
   const getDurationText = (episodes, runTime) => {
@@ -253,16 +272,12 @@ export default function DramaList({ session, status }) {
 
       if (sortBy === 'tmdb_desc') return (b.site_rating || 0) - (a.site_rating || 0)
       if (sortBy === 'tmdb_asc') return (a.site_rating || 0) - (b.site_rating || 0)
-      
       if (sortBy === 'voirdrama_desc') return (b.voirdrama_rating || 0) - (a.voirdrama_rating || 0)
       if (sortBy === 'voirdrama_asc') return (a.voirdrama_rating || 0) - (b.voirdrama_rating || 0)
-      
       if (sortBy === 'air_date_desc') return new Date(b.first_air_date || 0) - new Date(a.first_air_date || 0)
       if (sortBy === 'air_date_asc') return new Date(a.first_air_date || 0) - new Date(b.first_air_date || 0)
-      
       if (sortBy === 'date_desc') return new Date(b.created_at) - new Date(a.created_at)
       if (sortBy === 'date_asc') return new Date(a.created_at) - new Date(b.created_at)
-      
       if (sortBy === 'status_ended') {
         const endedA = ['Ended', 'Canceled', 'Terminée', 'Annulée'].includes(infoA.status) ? 1 : 0;
         const endedB = ['Ended', 'Canceled', 'Terminée', 'Annulée'].includes(infoB.status) ? 1 : 0;
@@ -273,7 +288,33 @@ export default function DramaList({ session, status }) {
         const ongoingB = ['Returning Series', 'In Production', 'De retour', 'En production', 'Pilot', 'Pilote'].includes(infoB.status) ? 1 : 0;
         return ongoingB - ongoingA;
       }
+      
+      // LOGIQUE METTANT LES INCONNUS EN HAUT, PUIS TRI SELON LE TEMPS
+      if (sortBy === 'runtime_short' || sortBy === 'runtime_long') {
+        const epA = infoA.number_of_episodes || a.number_of_episodes || 0;
+        const rtA = (a.episode_run_time && a.episode_run_time > 0) ? a.episode_run_time : (infoA.episode_run_time || 0);
+        const unknownA = (!epA || !rtA) ? 1 : 0;
+        const totalA = epA * rtA;
 
+        const epB = infoB.number_of_episodes || b.number_of_episodes || 0;
+        const rtB = (b.episode_run_time && b.episode_run_time > 0) ? b.episode_run_time : (infoB.episode_run_time || 0);
+        const unknownB = (!epB || !rtB) ? 1 : 0;
+        const totalB = epB * rtB;
+
+        // Les séries avec une durée inconnue (1) remontent avant celles avec une durée connue (0)
+        if (unknownA !== unknownB) {
+          return unknownB - unknownA;
+        }
+        
+        // Si les deux séries ont une durée connue, on trie selon le choix
+        if (unknownA === 0 && unknownB === 0) {
+          if (sortBy === 'runtime_short') return totalA - totalB; // Du plus court au plus long
+          if (sortBy === 'runtime_long') return totalB - totalA;  // Du plus long au plus court
+        }
+
+        return 0;
+      }
+      
       if (sortBy === 'personal_rating_desc') return (b.personal_rating || 0) - (a.personal_rating || 0)
       return 0
     })
@@ -297,7 +338,9 @@ export default function DramaList({ session, status }) {
           <option value="date_asc">8 - Date d'ajout ancien</option>
           <option value="status_ended">9 - Par série terminée</option>
           <option value="status_ongoing">10 - Par série en cours de production</option>
-          {status === 'Watched' && <option value="personal_rating_desc">Ma note (Décroissante)</option>}
+          <option value="runtime_short">11 - Durée courte</option>
+          <option value="runtime_long">12 - Durée longue</option>
+          {status === 'Watched' && <option value="personal_rating_desc">13 - Ma note (Décroissante)</option>}
         </select>
       </div>
 
@@ -305,10 +348,17 @@ export default function DramaList({ session, status }) {
         {processedDramas.map((drama) => {
           const tmdbInfo = tmdbDataMap[drama.id]
           const isLoadingStatus = !tmdbInfo
+          
           const englishTitle = tmdbInfo?.english || drama.title
           const originalTitle = tmdbInfo?.original || drama.title
           const frenchTitle = tmdbInfo?.french || drama.title
+          
           const isEnded = tmdbInfo ? ['Ended', 'Canceled', 'Terminée', 'Annulée'].includes(tmdbInfo.status) : false
+
+          // On privilégie les stats TMDB, si elles ne sont pas encore là on utilise la base locale.
+          const seasons = tmdbInfo?.number_of_seasons || drama.number_of_seasons;
+          const episodes = tmdbInfo?.number_of_episodes || drama.number_of_episodes;
+          const runTime = (drama.episode_run_time && drama.episode_run_time > 0) ? drama.episode_run_time : (tmdbInfo?.episode_run_time || 0);
 
           return (
             <Link 
@@ -361,24 +411,20 @@ export default function DramaList({ session, status }) {
 
               <div className="drama-info">
                 
-                {/* 1. TITRE EN ANGLAIS */}
                 <h4 className="drama-title-en" title={englishTitle}>
                   {englishTitle}
                 </h4>
                 
-                {/* 2. TITRE EN VERSION ORIGINALE */}
                 <div className="drama-title-orig">
                   {originalTitle}
                 </div>
                 
-                {/* 3. TITRE EN FRANÇAIS */}
                 <div style={{ fontSize: '0.78rem', color: '#c7d0ff', fontStyle: 'italic', opacity: 0.9, marginTop: '2px' }}>
-                  {frenchTitle && frenchTitle !== englishTitle ? `FR : ${frenchTitle}` : `FR : ${englishTitle}`}
+                  {frenchTitle && frenchTitle !== englishTitle ? `FR : ${frenchTitle}` : 'FR : Titre identique'}
                 </div>
 
                 <div className="drama-genres">{drama.genre || 'Aucun genre spécifié'}</div>
                 
-                {/* --- TOUT CE QUI SUIT EST POUSSÉ TOUT EN BAS DE LA CARTE --- */}
                 <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', width: '100%' }}>
                   
                   <div className="drama-meta-row">
@@ -386,10 +432,10 @@ export default function DramaList({ session, status }) {
                       <span style={{ fontSize: '1.25rem', lineHeight: '1' }}>📑</span>
                       <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
                         <strong style={{ color: '#fff', fontSize: '0.9rem' }}>
-                          {drama.number_of_seasons ? `${drama.number_of_seasons} Saison${drama.number_of_seasons > 1 ? 's' : ''}` : '? Saison'}
+                          {seasons ? `${seasons} Saison${seasons > 1 ? 's' : ''}` : '? Saison'}
                         </strong>
                         <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.2rem' }}>
-                          {drama.number_of_episodes ? `${drama.number_of_episodes} épisodes` : '? épisodes'}
+                          {episodes ? `${episodes} épisodes` : '? épisodes'}
                         </span>
                       </div>
                     </div>
@@ -398,7 +444,7 @@ export default function DramaList({ session, status }) {
                       <span style={{ fontSize: '1.25rem', lineHeight: '1' }}>⏳</span>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: '1.2' }}>
                         <strong style={{ color: '#fff', fontSize: '0.9rem' }}>
-                          {getDurationText(drama.number_of_episodes, drama.episode_run_time)}
+                          {getDurationText(episodes, runTime)}
                         </strong>
                         <button 
                           onClick={(e) => openRuntimeModal(drama, e)}
@@ -478,52 +524,60 @@ export default function DramaList({ session, status }) {
 
       {/* --- Boîte Modale de Durée --- */}
       {runtimeModalOpen && runtimeDrama && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0, 0, 0, 0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(5px)' }} onClick={closeRuntimeModal}>
-          <div style={{ background: 'var(--bg-card)', padding: '2rem', borderRadius: '24px', border: '1px solid var(--border-color)', width: '90%', maxWidth: '500px', boxShadow: '0 24px 80px rgba(0, 0, 0, 0.5)' }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 0.5rem 0', color: 'var(--primary-color)' }}>Modifier la durée</h3>
-            <p style={{ margin: '0 0 1.5rem 0', color: 'var(--secondary-text)', fontSize: '0.9rem' }}>{runtimeDrama.title}</p>
-            <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '1rem', flexWrap: 'wrap' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}><input type="radio" checked={runtimeMode === 'average'} onChange={() => setRuntimeMode('average')} style={{ width: 'auto', boxShadow: 'none' }} />Moyenne</label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}><input type="radio" checked={runtimeMode === 'individual'} onChange={() => setRuntimeMode('individual')} style={{ width: 'auto', boxShadow: 'none' }} />Individuel</label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}><input type="radio" checked={runtimeMode === 'total'} onChange={() => setRuntimeMode('total')} style={{ width: 'auto', boxShadow: 'none' }} />Total</label>
+        <div className="duration-modal-overlay" onClick={closeRuntimeModal}>
+          <div className="duration-modal-content" onClick={(e) => e.stopPropagation()}>
+            
+            <div className="duration-modal-header">
+              <svg 
+                width="40" height="40" viewBox="0 0 24 24" fill="none" 
+                stroke="var(--primary-color)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" 
+                style={{ marginBottom: '0.5rem' }}
+              >
+                <path d="M5 22h14"></path>
+                <path d="M5 2h14"></path>
+                <path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"></path>
+                <path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"></path>
+              </svg>
+              <h3 className="duration-modal-title">Durée de l'épisode</h3>
+              <p className="duration-modal-subtitle">Ajustez le temps de visionnage moyen.</p>
             </div>
 
-            {runtimeMode === 'average' && (
-              <div style={{ marginBottom: '2rem' }}>
-                <label className="panel-label">Durée moyenne d'un épisode</label>
-                <div style={{ display: 'flex', gap: '1rem' }}><div style={{ flex: 1 }}><input type="number" className="input-field" value={avgHours} onChange={e => setAvgHours(e.target.value)} placeholder="Heures" /></div><div style={{ flex: 1 }}><input type="number" className="input-field" value={avgMinutes} onChange={e => setAvgMinutes(e.target.value)} placeholder="Minutes" /></div></div>
+            <div className="duration-modal-body">
+              
+              <div className="duration-input-wrapper">
+                <input 
+                  type="number" 
+                  className="duration-input" 
+                  value={editRuntime} 
+                  onChange={(e) => setEditRuntime(e.target.value)}
+                  min="0"
+                  autoFocus
+                />
+                <span className="duration-label">minutes</span>
               </div>
-            )}
 
-            {runtimeMode === 'individual' && (
-              <div style={{ marginBottom: '2rem' }}>
-                <label className="panel-label" style={{ marginBottom: '0.5rem' }}>Durée de chaque épisode</label>
-                <div style={{ maxHeight: '250px', overflowY: 'auto', paddingRight: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {individualRuntimes.map((duration, index) => (
-                    <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{ fontSize: '0.8rem', color: '#ccc', width: '45px' }}>Ép. {index + 1}</span>
-                      <input type="number" className="input-field" style={{ padding: '0.4rem', fontSize: '0.9rem', flex: 1 }} value={duration.h} onChange={e => handleIndividualChange(index, 'h', e.target.value)} placeholder="Heures" />
-                      <input type="number" className="input-field" style={{ padding: '0.4rem', fontSize: '0.9rem', flex: 1 }} value={duration.m} onChange={e => handleIndividualChange(index, 'm', e.target.value)} placeholder="Minutes" />
-                    </div>
-                  ))}
-                </div>
+              <div className="duration-modal-actions">
+                <button 
+                  className="secondary-btn" 
+                  onClick={closeRuntimeModal}
+                  disabled={savingRuntime}
+                >
+                  Annuler
+                </button>
+                <button 
+                  className="primary-btn" 
+                  onClick={handleSaveRuntime}
+                  disabled={savingRuntime}
+                >
+                  {savingRuntime ? '...' : 'Valider'}
+                </button>
               </div>
-            )}
 
-            {runtimeMode === 'total' && (
-              <div style={{ marginBottom: '2rem' }}>
-                <label className="panel-label">Durée totale de la série</label>
-                <div style={{ display: 'flex', gap: '1rem' }}><div style={{ flex: 1 }}><input type="number" className="input-field" value={totalHours} onChange={e => totalHours(e.target.value)} placeholder="Heures" /></div><div style={{ flex: 1 }}><input type="number" className="input-field" value={totalMinutes} onChange={e => setTotalMinutes(e.target.value)} placeholder="Minutes" /></div></div>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <button className="primary-btn" onClick={handleSaveRuntime} style={{ flex: 1 }}>Enregistrer</button>
-              <button className="secondary-btn" onClick={closeRuntimeModal} style={{ flex: 1 }}>Annuler</button>
             </div>
           </div>
         </div>
       )}
+      
     </div>
   )
 }
