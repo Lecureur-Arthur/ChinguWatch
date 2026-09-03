@@ -467,7 +467,6 @@ export default function DramaDetail() {
         // Si "En cours" =>
         if (i < seasonNum) {
           // Les précédentes passent en "En cours" UNIQUEMENT si elles étaient "À voir"
-          // (On n'écrase pas une saison qui serait déjà "Vu")
           if (currentStat === 'To Watch') {
             updatedProgress[i] = 'Watching';
           }
@@ -476,10 +475,8 @@ export default function DramaDetail() {
           updatedProgress[i] = 'Watching';
         }
       } else if (newStat === 'To Watch') {
-        // Si "À voir" => cette saison et les suivantes repassent en "À voir" (les précédentes ne bougent pas)
-        if (i >= seasonNum) {
-          updatedProgress[i] = 'To Watch';
-        }
+        // Si "À voir" => TOUTES les saisons repassent en "À voir"
+        updatedProgress[i] = 'To Watch';
       }
     });
 
@@ -866,6 +863,7 @@ export default function DramaDetail() {
             {tmdbSeasons.filter(s => s.season_number > 0).map(season => {
               const currentStatus = seasonsProgress[season.season_number] || 'To Watch';
               
+              // Détermine si on doit désactiver l'option "Vu"
               const isOngoing = ['Returning Series', 'In Production', 'Pilot', 'Pilote', 'De retour', 'En production'].includes(tmdbData?.status);
               const maxSeasonNum = Math.max(...tmdbSeasons.filter(s => s.season_number > 0).map(s => s.season_number));
               const isLastSeason = season.season_number === maxSeasonNum;
