@@ -4,22 +4,10 @@ import { supabase } from './supabaseClient'
 import { translateLongText } from './translationService'
 
 const TMDB_TV_GENRES = {
-  10759: "Action & Aventure",
-  16: "Animation",
-  35: "Comédie",
-  80: "Crime",
-  99: "Documentaire",
-  18: "Drame",
-  10751: "Familial",
-  10762: "Kids",
-  9648: "Mystère",
-  10763: "News",
-  10764: "Reality",
-  10765: "Sci-Fi & Fantasy",
-  10766: "Soap",
-  10767: "Talk",
-  10768: "Guerre & Politique",
-  37: "Western"
+  10759: "Action & Aventure", 16: "Animation", 35: "Comédie", 80: "Crime",
+  99: "Documentaire", 18: "Drame", 10751: "Familial", 10762: "Kids",
+  9648: "Mystère", 10763: "News", 10764: "Reality", 10765: "Sci-Fi & Fantasy",
+  10766: "Soap", 10767: "Talk", 10768: "Guerre & Politique", 37: "Western"
 };
 
 export default function DramaDetail() {
@@ -58,6 +46,10 @@ export default function DramaDetail() {
   const [selectedActor, setSelectedActor] = useState(null)
   const [actorCredits, setActorCredits] = useState([])
   const [loadingActor, setLoadingActor] = useState(false)
+
+  // --- NOUVEAUX ÉTATS POUR LES SAISONS ---
+  const [tmdbSeasons, setTmdbSeasons] = useState([])
+  const [seasonsProgress, setSeasonsProgress] = useState({})
 
   // --- États pour la boîte modale de durée ---
   const [runtimeModalOpen, setRuntimeModalOpen] = useState(false)
@@ -152,9 +144,7 @@ export default function DramaDetail() {
                 seenSet.add(actor.id);
               }
             }
-          } catch (err) {
-            console.error("Erreur vérification acteur:", err);
-          }
+          } catch (err) {}
         })
       );
 
@@ -180,7 +170,8 @@ export default function DramaDetail() {
       episode_run_time: localDrama.episode_run_time,
       number_of_seasons: localDrama.number_of_seasons || null,
       number_of_episodes: localDrama.number_of_episodes || null,
-      synopsis: tmdbSynopsis
+      synopsis: tmdbSynopsis,
+      seasons_progress: {}
     }
 
     const { data, error } = await supabase.from('dramas').insert([newDrama]).select()
@@ -211,7 +202,8 @@ export default function DramaDetail() {
       episode_run_time: 0,
       number_of_seasons: credit.number_of_seasons || null,
       number_of_episodes: credit.total_episodes || credit.number_of_episodes || null,
-      synopsis: credit.overview || ''
+      synopsis: credit.overview || '',
+      seasons_progress: {}
     };
 
     const { data, error } = await supabase.from('dramas').insert([newDrama]).select();
@@ -245,6 +237,7 @@ export default function DramaDetail() {
         const detailDataFr = await detailResFr.json()
         const detailDataEn = await detailResEn.json()
         setTmdbData(detailDataFr)
+        setTmdbSeasons(detailDataFr.seasons || [])
 
         const englishTitle = detailDataEn.name || detailDataEn.original_name || 'Titre Inconnu'
         const originalTitle = detailDataFr.original_name || detailDataEn.original_name || englishTitle
@@ -341,6 +334,31 @@ export default function DramaDetail() {
         } else {
           setTmdbSynopsis('Aucun synopsis disponible.')
         }
+
+        // --- RÉTROCOMPATIBILITÉ ET REMPLISSAGE INTELLIGENT DES SAISONS ---
+        const ongoingStatuses = ['Returning Series', 'In Production', 'Pilot', 'Pilote', 'De retour', 'En production'];
+        const isOngoing = ongoingStatuses.includes(detailDataFr.status) || ongoingStatuses.includes(detailDataEn.status);
+
+        let currentOverallStatus = dbData.status;
+
+        if (currentOverallStatus === 'Watched' && isOngoing) {
+          currentOverallStatus = 'Watching';
+          setSelectedStatus('Watching');
+          setLocalDrama(prev => prev ? { ...prev, status: 'Watching' } : prev);
+          await supabase.from('dramas').update({ status: 'Watching' }).eq('id', dbData.id);
+        }
+
+        const fetchedSeasons = detailDataFr.seasons || []
+        setTmdbSeasons(fetchedSeasons)
+
+        const currentProgress = { ...(dbData.seasons_progress || {}) }
+        
+        fetchedSeasons.filter(s => s.season_number > 0).forEach(s => {
+          if (!currentProgress[s.season_number]) {
+            currentProgress[s.season_number] = (currentOverallStatus === 'Watched' || currentOverallStatus === 'Watching') ? currentOverallStatus : 'To Watch'
+          }
+        })
+        setSeasonsProgress(currentProgress)
       }
     } catch (error) {}
     setLoading(false)
@@ -419,12 +437,90 @@ export default function DramaDetail() {
     setLoadingActor(false)
   }
 
+  // --- MISE À JOUR CASCADÉE DES SAISONS AVEC SÉCURITÉ ---
+  const handleSeasonStatusChange = async (seasonNum, newStat) => {
+    let updatedProgress = { ...seasonsProgress };
+    const relevantSeasons = tmdbSeasons.filter(s => s.season_number > 0);
+    const maxSeasonNum = relevantSeasons.length > 0 ? Math.max(...relevantSeasons.map(s => s.season_number)) : 0;
+    
+    const ongoingStatuses = ['Returning Series', 'In Production', 'Pilot', 'Pilote', 'De retour', 'En production'];
+    const isOngoing = ongoingStatuses.includes(tmdbData?.status);
+
+    // SECURITÉ : Empêche la dernière saison d'être passée en "Vu" si en production
+    if (newStat === 'Watched' && isOngoing && seasonNum === maxSeasonNum) {
+      alert("La série est en cours de production. La dernière saison ne peut pas être marquée comme 'Vu'.");
+      return;
+    }
+
+    relevantSeasons.forEach(s => {
+      const i = s.season_number;
+      const currentStat = updatedProgress[i] || 'To Watch';
+
+      if (newStat === 'Watched') {
+        // Si "Vu" => cette saison et les précédentes en "Vu", les suivantes en "En cours"
+        if (i <= seasonNum) {
+          updatedProgress[i] = 'Watched';
+        } else {
+          updatedProgress[i] = 'Watching';
+        }
+      } else if (newStat === 'Watching') {
+        // Si "En cours" =>
+        if (i < seasonNum) {
+          // Les précédentes passent en "En cours" UNIQUEMENT si elles étaient "À voir"
+          // (On n'écrase pas une saison qui serait déjà "Vu")
+          if (currentStat === 'To Watch') {
+            updatedProgress[i] = 'Watching';
+          }
+        } else {
+          // Cette saison et les suivantes passent en "En cours"
+          updatedProgress[i] = 'Watching';
+        }
+      } else if (newStat === 'To Watch') {
+        // Si "À voir" => cette saison et les suivantes repassent en "À voir" (les précédentes ne bougent pas)
+        if (i >= seasonNum) {
+          updatedProgress[i] = 'To Watch';
+        }
+      }
+    });
+
+    setSeasonsProgress(updatedProgress);
+
+    // Évaluation du statut global de la série
+    const allWatched = relevantSeasons.every(s => updatedProgress[s.season_number] === 'Watched');
+    const anyWatching = relevantSeasons.some(s => updatedProgress[s.season_number] === 'Watching' || updatedProgress[s.season_number] === 'Watched');
+
+    let newOverallStatus = 'To Watch';
+    if (allWatched) {
+      newOverallStatus = isOngoing ? 'Watching' : 'Watched';
+    } else if (anyWatching) {
+      newOverallStatus = 'Watching';
+    }
+
+    setSelectedStatus(newOverallStatus);
+    setLocalDrama(prev => ({ ...prev, status: newOverallStatus, seasons_progress: updatedProgress }));
+
+    await supabase.from('dramas').update({
+      seasons_progress: updatedProgress,
+      status: newOverallStatus
+    }).eq('id', localDrama.id);
+  }
+
   const saveSpecificField = async (field) => {
     setSaving(true)
     let updatePayload = {}
     
     if (field === 'status') {
-      updatePayload = { status: selectedStatus }
+      const ongoingStatuses = ['Returning Series', 'In Production', 'Pilot', 'Pilote', 'De retour', 'En production'];
+      const isOngoing = ongoingStatuses.includes(tmdbData?.status);
+      
+      if (selectedStatus === 'Watched' && isOngoing) {
+        alert("Cette série est encore en production. Elle a été placée dans 'En cours'.");
+        updatePayload = { status: 'Watching' };
+        setSelectedStatus('Watching');
+        setLocalDrama(prev => ({ ...prev, status: 'Watching' }));
+      } else {
+        updatePayload = { status: selectedStatus }
+      }
     } else if (field === 'personal_rating') {
       updatePayload = { personal_rating: personalRating ? parseFloat(personalRating) : null }
     } else if (field === 'voirdrama_rating') {
@@ -759,9 +855,51 @@ export default function DramaDetail() {
               
             </div>
           </div>
-
         </div>
       </div>
+
+      {/* --- MODULE DE SAISONS INDIVIDUELLES (Prend toute la largeur) --- */}
+      {!previewMode && tmdbSeasons.length > 0 && (
+        <div className="synopsis-box" style={{ width: '100%', marginBottom: '0' }}>
+          <div className="stat-box-title" style={{ fontSize: '1rem', marginBottom: '1rem' }}>Progression des saisons</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem' }}>
+            {tmdbSeasons.filter(s => s.season_number > 0).map(season => {
+              const currentStatus = seasonsProgress[season.season_number] || 'To Watch';
+              
+              const isOngoing = ['Returning Series', 'In Production', 'Pilot', 'Pilote', 'De retour', 'En production'].includes(tmdbData?.status);
+              const maxSeasonNum = Math.max(...tmdbSeasons.filter(s => s.season_number > 0).map(s => s.season_number));
+              const isLastSeason = season.season_number === maxSeasonNum;
+              const disableWatched = isOngoing && isLastSeason;
+
+              return (
+                <div key={season.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255, 255, 255, 0.03)', padding: '1rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    {season.poster_path && (
+                      <img src={`https://image.tmdb.org/t/p/w92${season.poster_path}`} alt={season.name} style={{ width: '40px', borderRadius: '6px' }} />
+                    )}
+                    <div>
+                      <div style={{ fontWeight: '700', color: '#fff', fontSize: '0.95rem' }}>{season.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>{season.episode_count} épisodes</div>
+                    </div>
+                  </div>
+                  <select
+                    value={currentStatus}
+                    onChange={(e) => handleSeasonStatusChange(season.season_number, e.target.value)}
+                    className="status-select"
+                    style={{ width: 'auto', padding: '6px 12px', fontSize: '0.85rem' }}
+                  >
+                    <option value="To Watch">À voir</option>
+                    <option value="Watching">En cours</option>
+                    <option value="Watched" disabled={disableWatched} title={disableWatched ? "La série est toujours en production" : ""}>
+                      Vu
+                    </option>
+                  </select>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="detail-bottom-grid">
         <div className="stat-box">
