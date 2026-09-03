@@ -108,6 +108,21 @@ export default function DramaList({ session, status }) {
           if (!drama.number_of_episodes && fetchedEpisodes) dbUpdates.number_of_episodes = fetchedEpisodes;
           if (!drama.episode_run_time && fetchedRunTime > 0) dbUpdates.episode_run_time = fetchedRunTime;
 
+          // --- LOGIQUE DE RETOUR AUTO EN "EN COURS" SI LA SÉRIE EST EN PRODUCTION ---
+          const ongoingStatuses = ['Returning Series', 'In Production', 'Pilot', 'Pilote', 'De retour', 'En production'];
+          const isOngoing = ongoingStatuses.includes(dataFr.status) || ongoingStatuses.includes(dataEn.status);
+
+          if (drama.status === 'Watched' && isOngoing) {
+            dbUpdates.status = 'Watching';
+            // On cache la série visuellement de l'onglet "Vu"
+            setDramas(prev => prev.filter(d => d.id !== drama.id));
+          } else if (drama.status === 'Watched' && drama.number_of_seasons && fetchedSeasons > drama.number_of_seasons) {
+            // Rétrocompatibilité : si le nb de saisons augmente
+            dbUpdates.status = 'Watching';
+            dbUpdates.number_of_seasons = fetchedSeasons;
+            setDramas(prev => prev.filter(d => d.id !== drama.id));
+          }
+
           if (Object.keys(dbUpdates).length > 0) {
             await supabase.from('dramas').update(dbUpdates).eq('id', drama.id);
           }
@@ -158,6 +173,15 @@ export default function DramaList({ session, status }) {
     e.preventDefault()
     e.stopPropagation()
     
+    const tmdbInfo = tmdbDataMap[drama.id] || {};
+    const ongoingStatuses = ['Returning Series', 'In Production', 'Pilot', 'Pilote', 'De retour', 'En production'];
+    const isOngoing = ongoingStatuses.includes(tmdbInfo.status);
+
+    if (newStatus === 'Watched' && isOngoing) {
+      alert("Cette série est encore en production. Elle ne peut pas être marquée comme 'Vu'.");
+      newStatus = 'Watching';
+    }
+
     if (newStatus === 'Watched') {
       setReviewingId(drama.id)
       setReviewRating('')
@@ -301,15 +325,13 @@ export default function DramaList({ session, status }) {
         const unknownB = (!epB || !rtB) ? 1 : 0;
         const totalB = epB * rtB;
 
-        // Les séries avec une durée inconnue (1) remontent avant celles avec une durée connue (0)
         if (unknownA !== unknownB) {
           return unknownB - unknownA;
         }
         
-        // Si les deux séries ont une durée connue, on trie selon le choix
         if (unknownA === 0 && unknownB === 0) {
-          if (sortBy === 'runtime_short') return totalA - totalB; // Du plus court au plus long
-          if (sortBy === 'runtime_long') return totalB - totalA;  // Du plus long au plus court
+          if (sortBy === 'runtime_short') return totalA - totalB;
+          if (sortBy === 'runtime_long') return totalB - totalA;
         }
 
         return 0;
@@ -355,7 +377,6 @@ export default function DramaList({ session, status }) {
           
           const isEnded = tmdbInfo ? ['Ended', 'Canceled', 'Terminée', 'Annulée'].includes(tmdbInfo.status) : false
 
-          // On privilégie les stats TMDB, si elles ne sont pas encore là on utilise la base locale.
           const seasons = tmdbInfo?.number_of_seasons || drama.number_of_seasons;
           const episodes = tmdbInfo?.number_of_episodes || drama.number_of_episodes;
           const runTime = (drama.episode_run_time && drama.episode_run_time > 0) ? drama.episode_run_time : (tmdbInfo?.episode_run_time || 0);

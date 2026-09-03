@@ -23,49 +23,73 @@ export default function App() {
   const navigate = useNavigate()
   const location = useLocation()
 
+  // 1er useEffect : Gère UNIQUEMENT l'authentification
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
-      if (session) fetchCategoryCounts(session.user.id)
     })
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
-      if (session) fetchCategoryCounts(session.user.id)
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
-  // Fonction pour récupérer les totaux depuis Supabase
-  const fetchCategoryCounts = async (userId) => {
-    try {
-      const { data, error } = await supabase
-        .from('dramas')
-        .select('status')
-        .eq('user_id', userId)
+  // 2ème useEffect : Gère le comptage et le TEMPS RÉEL (se lance dès qu'une session est dispo)
+  useEffect(() => {
+    // Si l'utilisateur n'est pas connecté, on ne fait rien
+    if (!session?.user?.id) return;
 
-      if (error) throw error
+    const userId = session.user.id;
 
-      const tally = {
-        toWatch: 0,
-        watching: 0,
-        watched: 0,
-        notFound: 0
+    // Fonction pour récupérer les totaux depuis Supabase
+    const fetchCategoryCounts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('dramas')
+          .select('status')
+          .eq('user_id', userId)
+
+        if (error) throw error
+
+        const tally = { toWatch: 0, watching: 0, watched: 0, notFound: 0 }
+
+        data.forEach(item => {
+          if (item.status === 'To Watch') tally.toWatch++
+          if (item.status === 'Watching') tally.watching++
+          if (item.status === 'Watched') tally.watched++
+          if (item.status === 'Not Found') tally.notFound++
+        })
+
+        setCounts(tally)
+      } catch (err) {
+        console.error("Erreur lors de la récupération des compteurs :", err)
       }
-
-      data.forEach(item => {
-        if (item.status === 'To Watch') tally.toWatch++
-        if (item.status === 'Watching') tally.watching++
-        if (item.status === 'Watched') tally.watched++
-        if (item.status === 'Not Found') tally.notFound++
-      })
-
-      setCounts(tally)
-    } catch (err) {
-      console.error("Erreur lors de la récupération des compteurs :", err)
     }
-  }
+
+    // 1. On compte les séries au chargement de l'application
+    fetchCategoryCounts()
+
+    // 2. On ouvre la connexion en Temps Réel avec Supabase
+    const channel = supabase
+      .channel('dramas_realtime_channel')
+      .on(
+        'postgres_changes', 
+        { event: '*', schema: 'public', table: 'dramas' }, 
+        () => {
+          // Dès que la base de données signale une modif (sur n'importe quelle série),
+          // on recompte les totaux instantanément !
+          fetchCategoryCounts()
+        }
+      )
+      .subscribe()
+
+    // 3. Si l'utilisateur se déconnecte ou quitte l'app, on coupe proprement la connexion
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [session]) // Ce bloc se relancera parfaitement si l'état de la session change
 
   if (!session) return <Auth />
 
@@ -76,7 +100,6 @@ export default function App() {
       {/* SIDEBAR GAUCHE */}
       <aside className="sidebar">
         <div className="sidebar-logo">
-          {/* Remplace ce SVG par ton propre logo (ex: le phénix/oiseau de ton Figma) */}
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px' }}>
             <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
             <path d="M2 17l10 5 10-5"></path>
@@ -89,7 +112,6 @@ export default function App() {
         <div className="menu-label">Menu Principal</div>
         
         <button className={`nav-btn ${isActive('/ToWatch') ? 'active' : ''}`} onClick={() => navigate('/ToWatch')}>
-          {/* SVG icon "A voir" */}
           <svg className="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
           </svg>
@@ -117,7 +139,6 @@ export default function App() {
         <div className="menu-label">Outils & Découverte</div>
 
         <button className={`nav-btn ${isActive('/NotFound') ? 'active' : ''}`} onClick={() => navigate('/NotFound')}>
-          {/* Remplace ce SVG par ton icône "Vidéo introuvable" */}
           <svg className="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10"></circle>
             <line x1="15" y1="9" x2="9" y2="15"></line>
@@ -127,7 +148,6 @@ export default function App() {
           <span className="sidebar-badge badge-warning">{counts.notFound}</span>
         </button>
         <button className={`nav-btn ${isActive('/Add') ? 'active' : ''}`} onClick={() => navigate('/Add')}>
-          {/* Remplace ce SVG par ton icône "Ajouter" */}
           <svg className="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10"></circle>
             <line x1="12" y1="8" x2="12" y2="16"></line>
@@ -139,7 +159,6 @@ export default function App() {
         <div style={{ flex: 1 }}></div>
 
         <button className={`nav-btn ${isActive('/Profil') ? 'active' : ''}`} onClick={() => navigate('/Profil')}>
-          {/* Remplace ce SVG par ton icône "Paramètres" */}
           <svg className="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
