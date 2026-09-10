@@ -2,24 +2,11 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 
-// Dictionnaire de conversion des genres TV de TMDB
 const TMDB_TV_GENRES = {
-  10759: "Action & Aventure",
-  16: "Animation",
-  35: "Comédie",
-  80: "Crime",
-  99: "Documentaire",
-  18: "Drame",
-  10751: "Familial",
-  10762: "Kids",
-  9648: "Mystère",
-  10763: "News",
-  10764: "Reality",
-  10765: "Sci-Fi & Fantasy",
-  10766: "Soap",
-  10767: "Talk",
-  10768: "Guerre & Politique",
-  37: "Western"
+  10759: "Action & Aventure", 16: "Animation", 35: "Comédie", 80: "Crime",
+  99: "Documentaire", 18: "Drame", 10751: "Familial", 10762: "Kids",
+  9648: "Mystère", 10763: "News", 10764: "Reality", 10765: "Sci-Fi & Fantasy",
+  10766: "Soap", 10767: "Talk", 10768: "Guerre & Politique", 37: "Western"
 };
 
 export default function AddDrama({ session }) {
@@ -40,17 +27,13 @@ export default function AddDrama({ session }) {
         setSearchResults([])
       }
     }, 500)
-
     return () => clearTimeout(delayDebounceFn)
   }, [searchQuery, searchMode])
 
   useEffect(() => {
     const fetchUserDramas = async () => {
       if (session?.user?.id) {
-        const { data } = await supabase
-          .from('dramas')
-          .select('*')
-          .eq('user_id', session.user.id)
+        const { data } = await supabase.from('dramas').select('*').eq('user_id', session.user.id)
         if (data) setUserDramas(data)
       }
     }
@@ -112,12 +95,8 @@ export default function AddDrama({ session }) {
             const creditsData = await creditsResponse.json();
 
             if (creditsData.cast && creditsData.cast.length > 0) {
-              
               const nonAnimatedCredits = creditsData.cast.filter(item => !(item.genre_ids && item.genre_ids.includes(16)))
-
-              const topCredits = nonAnimatedCredits
-                .sort((a, b) => b.popularity - a.popularity)
-                .slice(0, 12);
+              const topCredits = nonAnimatedCredits.sort((a, b) => b.popularity - a.popularity).slice(0, 12);
 
               const detailedCredits = await Promise.all(topCredits.map(async (item) => {
                 const detailRes = await fetch(`https://api.themoviedb.org/3/tv/${item.id}?language=fr-FR&api_key=${apiKey}`)
@@ -140,7 +119,6 @@ export default function AddDrama({ session }) {
 
           const uniqueDramas = Array.from(new Map(allDramas.map(item => [item.id, item])).values());
           uniqueDramas.sort((a, b) => b.popularity - a.popularity);
-
           setSearchResults(uniqueDramas);
         } else {
           setSearchResults([]);
@@ -170,12 +148,7 @@ export default function AddDrama({ session }) {
 
       const title = drama.displayName || drama.name || drama.original_name || 'Titre inconnu'
 
-      const { data: existing } = await supabase
-        .from('dramas')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('tmdb_id', drama.id)
-        .limit(1)
+      const { data: existing } = await supabase.from('dramas').select('id').eq('user_id', user.id).eq('tmdb_id', drama.id).limit(1)
 
       if (existing && existing.length > 0) {
         alert('Ce drama est déjà présent dans votre liste.')
@@ -185,7 +158,6 @@ export default function AddDrama({ session }) {
 
       const posterUrl = drama.poster_path ? `https://image.tmdb.org/t/p/w500${drama.poster_path}` : null
 
-      // ICI : L'objet sauvegardé contient bien les 3 informations capitales pour DramaList
       const newDrama = {
         user_id: user.id,
         title: title,
@@ -195,7 +167,8 @@ export default function AddDrama({ session }) {
         tmdb_id: drama.id,
         number_of_seasons: drama.number_of_seasons || null,
         number_of_episodes: drama.number_of_episodes || null,
-        episode_run_time: drama.episode_run_time || 0
+        episode_run_time: drama.episode_run_time || 0,
+        seasons_progress: {}
       }
 
       const { data, error } = await supabase.from('dramas').insert([newDrama]).select()
@@ -207,7 +180,6 @@ export default function AddDrama({ session }) {
       }
     } catch (error) {
       console.error("Erreur lors de l'ajout rapide", error)
-      alert("Erreur système.")
     }
     
     setAddingDrama(false)
@@ -246,52 +218,29 @@ export default function AddDrama({ session }) {
           <div className="actor-credits-grid" style={{ marginTop: '1.5rem', marginBottom: '2rem' }}>
             {searchResults.map((result) => {
               
-              const catalogEntry = userDramas.find(d => 
-                (d.tmdb_id && d.tmdb_id === result.id) || 
-                (createSlug(d.title) === createSlug(result.displayName || result.name || result.original_name))
-              );
+              // LOGIQUE CORRIGÉE : On privilégie absolument le TMDB_ID. S'il n'y a pas d'ID, on cherche le titre en recours.
+              const catalogEntry = userDramas.find(d => {
+                if (d.tmdb_id) return d.tmdb_id == result.id;
+                return createSlug(d.title) === createSlug(result.displayName || result.name || result.original_name);
+              });
 
               let catalogInfo = null;
               if (catalogEntry) {
                 switch(catalogEntry.status) {
-                  case 'Watched': 
-                    catalogInfo = { 
-                      icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>,
-                      text: ' Vu', classSuffix: 'watched' 
-                    }; 
-                    break;
-                  case 'Watching': 
-                    catalogInfo = { 
-                      icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>,
-                      text: ' En cours', classSuffix: 'watching' 
-                    }; 
-                    break;
-                  case 'To Watch': 
-                    catalogInfo = { 
-                      icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>,
-                      text: ' À voir', classSuffix: 'towatch' 
-                    }; 
-                    break;
-                  case 'Not Found': 
-                    catalogInfo = { 
-                      icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>,
-                      text: 'Introuvable', classSuffix: 'notfound' 
-                    }; 
-                    break;
+                  case 'Watched': catalogInfo = { icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>, text: ' Vu', classSuffix: 'watched' }; break;
+                  case 'Watching': catalogInfo = { icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>, text: ' En cours', classSuffix: 'watching' }; break;
+                  case 'To Watch': catalogInfo = { icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>, text: ' À voir', classSuffix: 'towatch' }; break;
+                  case 'Not Found': catalogInfo = { icon: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>, text: 'Introuvable', classSuffix: 'notfound' }; break;
                   default: break;
                 }
               }
 
-              const genreNames = (result.genre_ids || [])
-                .map(id => TMDB_TV_GENRES[id])
-                .filter(Boolean)
-                .slice(0, 2)
-                .join(', ');
-
+              const genreNames = (result.genre_ids || []).map(id => TMDB_TV_GENRES[id]).filter(Boolean).slice(0, 2).join(', ');
               const year = result.first_air_date ? result.first_air_date.substring(0, 4) : '????';
               const frTitle = result.name;
               const enTitle = result.displayName;
               const isEnded = ['Ended', 'Canceled', 'Terminée', 'Annulée'].includes(result.tmdb_status);
+              const rating = result.vote_average ? result.vote_average.toFixed(1) : 'N/A';
               
               return (
                 <div 
@@ -319,9 +268,7 @@ export default function AddDrama({ session }) {
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="#facc15" stroke="#facc15" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
                         </svg>
-                        <span style={{ fontWeight: 'bold' }}>
-                          {result.vote_average ? result.vote_average.toFixed(1) : 'N/A'}
-                        </span>
+                        <span style={{ fontWeight: 'bold' }}>{rating}</span>
                       </div>
 
                       {/* Petite ligne de séparation verticale */}
