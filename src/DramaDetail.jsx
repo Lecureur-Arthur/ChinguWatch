@@ -457,25 +457,20 @@ export default function DramaDetail() {
       const currentStat = updatedProgress[i] || 'To Watch';
 
       if (newStat === 'Watched') {
-        // Si "Vu" => cette saison et les précédentes en "Vu", les suivantes en "En cours"
         if (i <= seasonNum) {
           updatedProgress[i] = 'Watched';
         } else {
           updatedProgress[i] = 'Watching';
         }
       } else if (newStat === 'Watching') {
-        // Si "En cours" =>
         if (i < seasonNum) {
-          // Les précédentes passent en "En cours" UNIQUEMENT si elles étaient "À voir"
           if (currentStat === 'To Watch') {
             updatedProgress[i] = 'Watching';
           }
         } else {
-          // Cette saison et les suivantes passent en "En cours"
           updatedProgress[i] = 'Watching';
         }
       } else if (newStat === 'To Watch') {
-        // Si "À voir" => TOUTES les saisons repassent en "À voir"
         updatedProgress[i] = 'To Watch';
       }
     });
@@ -623,9 +618,12 @@ export default function DramaDetail() {
   const openLink = (platform) => {
     const title = englishTitle || localDrama?.title || ''
     const encodedTitle = encodeURIComponent(title)
+    const formattedSearchTitle = encodeURIComponent(title).replace(/%20/g, '+')
     const slugName = createSlug(title)
     const links = {
       voirDrama: `https://voirdrama.to/drama/${slugName}/`,
+      platform1: `https://ww19.myasiantv.es/?s=${formattedSearchTitle}`,
+      iqiyi: `https://www.iq.com/search?query=${encodedTitle}&originInput=${encodedTitle}`,
       netflix: `https://www.netflix.com/search?q=${encodedTitle}`,
       primeVideo: `https://www.primevideo.com/search?q=${encodedTitle}`,
       disneyPlus: `https://www.disneyplus.com/search?q=${encodedTitle}`
@@ -637,6 +635,13 @@ export default function DramaDetail() {
     const titleToCopy = originalTitle || englishTitle || localDrama?.title || ''
     navigator.clipboard.writeText(titleToCopy).catch(err => {})
     window.open('https://voirdrama.to/', '_blank', 'noopener,noreferrer')
+  }
+
+  const handleCopyAndOpenKissKh = () => {
+    // Changement effectué ici : priorité à englishTitle pour ne pas copier les caractères coréens
+    const titleToCopy = englishTitle || localDrama?.title || ''
+    navigator.clipboard.writeText(titleToCopy).catch(err => {})
+    window.open('https://www.kisskh.ch/', '_blank', 'noopener,noreferrer')
   }
 
   if (loading) return <div style={{ color: '#fff' }}>Chargement...</div>
@@ -681,17 +686,17 @@ export default function DramaDetail() {
                 </div>
 
                 <div className="streaming-col">
-                  <button disabled className="streaming-badge">
+                  <button onClick={() => openLink('platform1')} className="streaming-badge">
                     <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                    Platform 1
+                    MyAsianTV
                   </button>
-                  <button disabled className="streaming-badge">
+                  <button onClick={handleCopyAndOpenKissKh} className="streaming-badge">
                     <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                    Platform 2
+                    KissKH
                   </button>
-                  <button disabled className="streaming-badge">
+                  <button onClick={() => openLink('iqiyi')} className="streaming-badge">
                     <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                    Platform 3
+                    iQIYI
                   </button>
                 </div>
 
