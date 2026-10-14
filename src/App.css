@@ -447,27 +447,19 @@ button, input, textarea, select { font-family: inherit; }
 
 .detail-bottom-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr); /* 5 colonnes pour correspondre au Figma */
-  gap: 1.5rem;
-  width: 100%;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1rem;
 }
 
-@media (max-width: 1200px) {
+/* Sur petit écran, on passe à 3 colonnes ou 2 colonnes pour que ça reste lisible */
+@media (max-width: 1024px) {
   .detail-bottom-grid {
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
   }
 }
-
-@media (max-width: 900px) {
-  .detail-top-section {
-    flex-direction: column;
-  }
-  .detail-poster-col {
-    width: 260px;
-    margin: 0 auto;
-  }
-  .stat-grid-2x2 {
-    grid-template-columns: 1fr;
+@media (max-width: 600px) {
+  .detail-bottom-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
