@@ -10,6 +10,26 @@ const TMDB_TV_GENRES = {
   10766: "Soap", 10767: "Talk", 10768: "Guerre & Politique", 37: "Western"
 };
 
+const COUNTRY_MAP = {
+  'KR': 'Coréenne',
+  'CN': 'Chinoise',
+  'JP': 'Japonaise',
+  'TW': 'Taïwanaise',
+  'TH': 'Thaïlandaise',
+  'HK': 'Hongkongaise',
+  'PH': 'Philippine',
+  'VN': 'Vietnamienne',
+  'US': 'Américaine',
+  'GB': 'Britannique',
+  'FR': 'Française',
+  'ES': 'Espagnole'
+};
+
+const getOriginCountry = (countries) => {
+  if (!countries || countries.length === 0) return 'Inconnue';
+  return countries.map(code => COUNTRY_MAP[code] || code).join(', ');
+};
+
 export default function DramaDetail() {
   const { slug } = useParams()
   const navigate = useNavigate()
@@ -904,7 +924,12 @@ export default function DramaDetail() {
         </div>
       )}
 
-      <div className="detail-bottom-grid">
+      {/* --- Grille du bas (Statistiques) avec style forcé pour 6 colonnes --- */}
+      <div className="detail-bottom-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '1rem' }}>
+        <div className="stat-box">
+          <div className="stat-box-title">Origine</div>
+          <div className="stat-box-value">{getOriginCountry(tmdbData?.origin_country)}</div>
+        </div>
         <div className="stat-box">
           <div className="stat-box-title">Statut</div>
           <div className="stat-box-value">{translateStatus(tmdbData?.status)}</div>
